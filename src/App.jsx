@@ -1,7 +1,7 @@
-import { SignUpPage } from './pages/SignUpPage';
+import { AuthPage } from './pages/AuthPage';
 
 export function App() {
-  return <SignUpPage />;
+  return <AuthPage defaultMode="login" />;
 }
 
 export default App;
