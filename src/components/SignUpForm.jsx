@@ -1,10 +1,19 @@
 import { useMemo, useState } from 'react';
+import { registerWithEmail } from '../utils/auth';
 import {
   OPERATOR_ROLES,
   evaluatePasswordStrength,
   validateField,
   validateSignUpForm,
 } from '../utils/validation';
+import { AuthSessionCard } from './AuthSessionCard';
+import {
+  EyeIcon,
+  InputField,
+  PasswordStrengthMeter,
+  SocialAuthButtons,
+} from './FormFields';
+import { SocialAuthModal } from './SocialAuthModal';
 
 const INITIAL_VALUES = {
   fullName: '',
@@ -17,103 +26,34 @@ const INITIAL_VALUES = {
   acceptedTerms: false,
 };
 
-function EyeIcon({ visible }) {
-  if (visible) {
-    return (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.77 21.77 0 0 1 5.06-5.94" />
-        <path d="M9.9 4.24A10.8 10.8 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.17 4.49" />
-        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-        <line x1="1" y1="1" x2="23" y2="23" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function InputField({
-  id,
-  name,
-  label,
-  type = 'text',
-  placeholder,
-  autoComplete,
-  value,
-  error,
-  optional = false,
-  hint,
-  onChange,
-  onBlur,
-  rightSlot,
-}) {
-  const errorId = `${id}-error`;
-  const hintId = hint ? `${id}-hint` : undefined;
-  const describedBy = [error ? errorId : null, hintId].filter(Boolean).join(' ') || undefined;
-
-  return (
-    <div className="field-group">
-      <div className="field-label-row">
-        <label htmlFor={id} className="field-label">
-          {label}
-        </label>
-        {optional && <span className="field-optional">Optional</span>}
-      </div>
-
-      <div className="input-wrapper">
-        <input
-          id={id}
-          name={name}
-          type={type}
-          value={value}
-          placeholder={placeholder}
-          autoComplete={autoComplete}
-          aria-invalid={Boolean(error)}
-          aria-describedby={describedBy}
-          className={`text-input ${rightSlot ? 'has-right-slot' : ''} ${error ? 'has-error' : ''}`}
-          onChange={onChange}
-          onBlur={onBlur}
-        />
-        {rightSlot}
-      </div>
-
-      {hint && !error && (
-        <p id={hintId} className="field-hint">
-          {hint}
-        </p>
-      )}
-      {error && (
-        <p id={errorId} className="field-error" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
 /**
  * NexusFlow operator account sign-up form with client-side validation,
- * password strength evaluation, and workspace provisioning preview.
+ * password strength evaluation, Google/Facebook sign-up, and account persistence.
  */
-export function SignUpForm() {
-  const [values, setValues] = useState(INITIAL_VALUES);
+export function SignUpForm({
+  initialEmail = '',
+  onSwitchToLogin,
+  onAuthSuccess,
+}) {
+  const [values, setValues] = useState({
+    ...INITIAL_VALUES,
+    email: initialEmail,
+  });
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedAccount, setSubmittedAccount] = useState(null);
-  const [signInNotice, setSignInNotice] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [socialProvider, setSocialProvider] = useState(null);
+  const [standaloneSession, setStandaloneSession] = useState(null);
 
   const strength = useMemo(() => evaluatePasswordStrength(values.password), [values.password]);
 
   const updateField = (name, nextValue) => {
     const nextValues = { ...values, [name]: nextValue };
     setValues(nextValues);
+    setFormError('');
 
     if (touched[name]) {
       const nextError = validateField(name, nextValue, nextValues);
@@ -139,8 +79,9 @@ export function SignUpForm() {
     setErrors((prev) => ({ ...prev, [name]: fieldError }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setFormError('');
 
     const allTouched = Object.keys(INITIAL_VALUES).reduce((acc, key) => {
       acc[key] = true;
@@ -156,91 +97,107 @@ export function SignUpForm() {
     }
 
     setIsSubmitting(true);
-    window.setTimeout(() => {
-      const roleObj = OPERATOR_ROLES.find((item) => item.value === values.role);
-      const slug = values.facilityName
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 18);
+    const result = await registerWithEmail({
+      fullName: values.fullName,
+      email: values.email,
+      facilityName: values.facilityName,
+      role: values.role,
+      alertPhone: values.alertPhone,
+      password: values.password,
+    });
+    setIsSubmitting(false);
 
-      setSubmittedAccount({
-        fullName: values.fullName.trim(),
-        email: values.email.trim(),
-        facilityName: values.facilityName.trim(),
-        roleLabel: roleObj ? roleObj.label : values.role,
-        alertPhone: values.alertPhone.trim(),
-        workspaceId: `nf-${slug || 'plant'}-${Math.floor(1000 + Math.random() * 9000)}`,
-      });
-      setIsSubmitting(false);
-    }, 650);
+    if (!result.ok) {
+      setFormError(result.error);
+      return;
+    }
+
+    const sessionPayload = {
+      user: result.user,
+      provider: 'password',
+      isNewUser: result.isNewUser,
+    };
+
+    if (onAuthSuccess) {
+      onAuthSuccess(sessionPayload);
+    } else {
+      setStandaloneSession(sessionPayload);
+    }
   };
 
   const handleReset = () => {
     setValues(INITIAL_VALUES);
     setErrors({});
     setTouched({});
-    setSubmittedAccount(null);
+    setStandaloneSession(null);
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setFormError('');
   };
 
-  if (submittedAccount) {
+  if (standaloneSession) {
     return (
-      <div className="signup-card success-card" role="status" aria-live="polite">
-        <div className="success-icon" aria-hidden="true">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-
-        <h2 className="form-title">Workspace account created</h2>
-        <p className="form-subtitle">
-          Operator credentials for <strong>{submittedAccount.facilityName}</strong> are ready for
-          NexusFlow telemetry rule authoring.
-        </p>
-
-        <dl className="summary-grid">
-          <div className="summary-row">
-            <dt>Operator</dt>
-            <dd>{submittedAccount.fullName}</dd>
-          </div>
-          <div className="summary-row">
-            <dt>Work Email</dt>
-            <dd>{submittedAccount.email}</dd>
-          </div>
-          <div className="summary-row">
-            <dt>Role</dt>
-            <dd>{submittedAccount.roleLabel}</dd>
-          </div>
-          <div className="summary-row">
-            <dt>Workspace ID</dt>
-            <dd className="mono-value">{submittedAccount.workspaceId}</dd>
-          </div>
-          {submittedAccount.alertPhone && (
-            <div className="summary-row">
-              <dt>SMS Alert Target</dt>
-              <dd className="mono-value">{submittedAccount.alertPhone}</dd>
-            </div>
-          )}
-        </dl>
-
-        <button type="button" className="btn-secondary" onClick={handleReset}>
-          Register another operator
-        </button>
-      </div>
+      <AuthSessionCard
+        user={standaloneSession.user}
+        provider={standaloneSession.provider}
+        isNewUser={standaloneSession.isNewUser}
+        onSignOut={handleReset}
+        onCreateAnother={handleReset}
+      />
     );
   }
 
   return (
     <div className="signup-card">
+      {onSwitchToLogin && (
+        <div className="auth-mode-tabs" role="tablist" aria-label="Authentication mode">
+          <button
+            type="button"
+            role="tab"
+            aria-selected="false"
+            className="auth-mode-tab"
+            onClick={() => onSwitchToLogin(values.email)}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected="true"
+            className="auth-mode-tab is-active"
+          >
+            Create Account
+          </button>
+        </div>
+      )}
+
       <div className="form-header">
         <h1 className="form-title">Create your NexusFlow account</h1>
         <p className="form-subtitle">
-          Set up operator access to design real-time sensor pipelines and anomaly alerts.
+          Set up operator access with your Gmail &amp; password, Google, or Facebook.
         </p>
       </div>
+
+      <SocialAuthButtons
+        mode="signup"
+        onSelectProvider={(provider) => setSocialProvider(provider)}
+        disabled={isSubmitting}
+      />
+
+      {formError && (
+        <div className="auth-alert auth-alert-error" role="alert">
+          <p>{formError}</p>
+          {onSwitchToLogin && (
+            <button
+              type="button"
+              className="alert-inline-action"
+              onClick={() => onSwitchToLogin(values.email)}
+            >
+              Sign in with {values.email.trim() || 'this email'} →
+            </button>
+          )}
+        </div>
+      )}
 
       <form className="signup-form" onSubmit={handleSubmit} noValidate>
         <div className="two-col-row">
@@ -259,9 +216,9 @@ export function SignUpForm() {
           <InputField
             id="email"
             name="email"
-            label="Work Email"
+            label="Gmail / Email Address"
             type="email"
-            placeholder="alex@apexplant.io"
+            placeholder="you@gmail.com"
             autoComplete="email"
             value={values.email}
             error={errors.email}
@@ -351,30 +308,7 @@ export function SignUpForm() {
           }
         />
 
-        <div className="strength-panel" aria-live="polite">
-          <div className="strength-header">
-            <span className="strength-title">Password strength</span>
-            <span className={`strength-badge tone-${strength.tone}`}>{strength.label}</span>
-          </div>
-          <div className="strength-bars" aria-hidden="true">
-            {[0, 1, 2, 3].map((segment) => (
-              <span
-                key={segment}
-                className={`strength-bar ${
-                  segment < strength.score ? `is-filled tone-${strength.tone}` : ''
-                }`}
-              />
-            ))}
-          </div>
-          <ul className="strength-rules">
-            {strength.checks.map((rule) => (
-              <li key={rule.id} className={rule.passed ? 'is-passed' : ''}>
-                <span className="rule-dot" aria-hidden="true" />
-                {rule.label}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <PasswordStrengthMeter strength={strength} />
 
         <InputField
           id="confirmPassword"
@@ -440,16 +374,32 @@ export function SignUpForm() {
         <button
           type="button"
           className="link-button"
-          onClick={() => setSignInNotice((prev) => !prev)}
+          onClick={() => onSwitchToLogin && onSwitchToLogin(values.email)}
         >
           Sign in
         </button>
-        {signInNotice && (
-          <p className="signin-notice" role="status">
-            This build includes the NexusFlow Sign Up page only.
-          </p>
-        )}
       </div>
+
+      {socialProvider && (
+        <SocialAuthModal
+          provider={socialProvider}
+          rememberMe
+          onClose={() => setSocialProvider(null)}
+          onSuccess={(result) => {
+            setSocialProvider(null);
+            const payload = {
+              user: result.user,
+              provider: socialProvider,
+              isNewUser: result.isNewUser,
+            };
+            if (onAuthSuccess) {
+              onAuthSuccess(payload);
+            } else {
+              setStandaloneSession(payload);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

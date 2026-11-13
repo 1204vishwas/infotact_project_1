@@ -60,8 +60,8 @@ export function validateField(name, value, formValues) {
       return '';
 
     case 'email':
-      if (!trimmed) return 'Work email is required.';
-      if (!EMAIL_PATTERN.test(trimmed)) return 'Enter a valid work email address.';
+      if (!trimmed) return 'Email address is required.';
+      if (!EMAIL_PATTERN.test(trimmed)) return 'Enter a valid email address.';
       return '';
 
     case 'facilityName':
@@ -111,6 +111,70 @@ export function validateField(name, value, formValues) {
 export function validateSignUpForm(formValues) {
   const errors = {};
   Object.keys(formValues).forEach((fieldName) => {
+    const error = validateField(fieldName, formValues[fieldName], formValues);
+    if (error) {
+      errors[fieldName] = error;
+    }
+  });
+  return errors;
+}
+
+/**
+ * Validates a single field of the login form.
+ * Returns an error string or an empty string when valid.
+ */
+export function validateLoginField(name, value) {
+  const trimmed = typeof value === 'string' ? value.trim() : value;
+
+  switch (name) {
+    case 'email':
+      if (!trimmed) return 'Email address is required.';
+      if (!EMAIL_PATTERN.test(trimmed)) return 'Enter a valid email address.';
+      return '';
+
+    case 'password':
+      if (!value) return 'Password is required.';
+      return '';
+
+    default:
+      return '';
+  }
+}
+
+/**
+ * Validates all credential fields in the login form.
+ */
+export function validateLoginForm(formValues) {
+  const errors = {};
+  ['email', 'password'].forEach((fieldName) => {
+    const error = validateLoginField(fieldName, formValues[fieldName]);
+    if (error) {
+      errors[fieldName] = error;
+    }
+  });
+  return errors;
+}
+
+/**
+ * Validates the password reset form (email, new password strength, confirmation).
+ */
+export function validateResetPasswordForm(formValues) {
+  const errors = {};
+  ['email', 'password', 'confirmPassword'].forEach((fieldName) => {
+    const error = validateField(fieldName, formValues[fieldName], formValues);
+    if (error) {
+      errors[fieldName] = error;
+    }
+  });
+  return errors;
+}
+
+/**
+ * Validates profile inputs inside the Google/Facebook sign-in modal.
+ */
+export function validateSocialAuthForm(formValues) {
+  const errors = {};
+  ['fullName', 'email'].forEach((fieldName) => {
     const error = validateField(fieldName, formValues[fieldName], formValues);
     if (error) {
       errors[fieldName] = error;

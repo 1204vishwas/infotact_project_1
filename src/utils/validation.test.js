@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {
   evaluatePasswordStrength,
   validateField,
+  validateLoginForm,
+  validateResetPasswordForm,
   validateSignUpForm,
+  validateSocialAuthForm,
 } from './validation.js';
 
 describe('evaluatePasswordStrength', () => {
@@ -55,5 +58,52 @@ describe('validateSignUpForm', () => {
   it('validates invalid phone when provided', () => {
     const error = validateField('alertPhone', 'abc', validForm);
     assert.ok(error);
+  });
+});
+
+describe('validateLoginForm', () => {
+  it('accepts a valid Gmail and password', () => {
+    const errors = validateLoginForm({
+      email: 'operator@gmail.com',
+      password: 'MyPassword1!',
+      rememberMe: true,
+    });
+    assert.deepEqual(errors, {});
+  });
+
+  it('rejects invalid email and empty password', () => {
+    const errors = validateLoginForm({
+      email: 'not-an-email',
+      password: '',
+    });
+    assert.ok(errors.email);
+    assert.ok(errors.password);
+  });
+});
+
+describe('validateResetPasswordForm', () => {
+  it('requires strong password and matching confirmation', () => {
+    const errors = validateResetPasswordForm({
+      email: 'operator@gmail.com',
+      password: 'weak',
+      confirmPassword: 'other',
+    });
+    assert.ok(errors.password);
+    assert.equal(errors.confirmPassword, 'Passwords do not match.');
+  });
+});
+
+describe('validateSocialAuthForm', () => {
+  it('accepts valid fullName and Gmail address', () => {
+    assert.deepEqual(
+      validateSocialAuthForm({ fullName: 'Alex Rivera', email: 'alex@gmail.com' }),
+      {}
+    );
+  });
+
+  it('rejects missing name or malformed email', () => {
+    const errors = validateSocialAuthForm({ fullName: 'A', email: 'bad' });
+    assert.ok(errors.fullName);
+    assert.ok(errors.email);
   });
 });
