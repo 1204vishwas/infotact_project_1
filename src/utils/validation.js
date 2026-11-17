@@ -93,7 +93,7 @@ export function validateField(name, value, formValues) {
 
     case 'confirmPassword':
       if (!value) return 'Please confirm your password.';
-      if (value !== formValues.password) return 'Passwords do not match.';
+      if (!formValues || value !== formValues.password) return 'Passwords do not match.';
       return '';
 
     case 'acceptedTerms':
