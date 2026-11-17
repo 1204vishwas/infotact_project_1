@@ -1,127 +1,151 @@
-# NexusFlow — Industrial IoT Telemetry Ingestion Engine & Operator Console
+# NexusFlow — Visual IoT Telemetry Engine, Stream Compiler & Operator Console
 
-NexusFlow is an industrial IoT telemetry pipeline platform. It provides a high-throughput **MongoDB Time-Series Telemetry Ingestion Engine** built on Express.js, paired with an operator access console featuring real-time stream preview, dual-mode authentication, cryptographic credential hashing, and telemetry downsampling analytics.
-
----
-
-## 🚀 Key Features
-
-### ⚡ MongoDB Time-Series Telemetry Engine (Nexus Cluster & Database)
-- **Native MongoDB Time-Series Architecture:**
-  - Automated creation and management of the `hardware_telemetry` collection in the local **`nexus`** cluster/database.
-  - Dedicated MongoDB Compass favorite connection **`nexus`** configured and saved.
-  - Configured with `timeField: "timestamp"`, `metaField: "metadata"`, and high-resolution `granularity: "seconds"`.
-  - Columnar bucket compression via `system.buckets.hardware_telemetry` achieving over 400+ measurements per physical storage bucket.
-- **Secondary Compound Indexing:**
-  - `idx_device_timestamp` (`{ "metadata.deviceId": 1, "timestamp": -1 }`): Instant point lookups of latest readings.
-  - `idx_facility_timestamp` (`{ "metadata.facilityId": 1, "timestamp": -1 }`): Plant-wide and facility-scoped querying.
-  - `idx_devicetype_timestamp` (`{ "metadata.deviceType": 1, "timestamp": -1 }`): Equipment-type classification queries.
-  - `idx_status_timestamp` (`{ "status": 1, "timestamp": -1 }`): High-speed anomaly filtering.
-
-### 🚄 High-Speed Express Ingestion Endpoints
-- **Synchronous Single-Point Ingestion (`POST /api/telemetry/single`):**
-  - Instant validation, metadata normalization, and single-document write.
-  - Rejects empty, whitespace-only, or missing `deviceId` values.
-- **High-Throughput Bulk Ingestion (`POST /api/telemetry/batch`):**
-  - Unordered parallelized `insertMany` with `{ ordered: false }` capable of ingesting up to 10,000 measurements per HTTP payload.
-  - Achieves **21,700+ measurements/second** ingestion rate against local MongoDB instance.
-- **Micro-Batch In-Memory Telemetry Buffer (`POST /api/telemetry/buffer`):**
-  - In-memory write queue with asynchronous micro-batch flushes triggered by batch threshold (1,000 items) or interval timer (100ms).
-  - Clean shutdown lifecycle: flushes remaining items before database connection teardown without interrupted operation errors.
-  - Returns immediate `202 Accepted` for sub-millisecond client write latencies.
-
-### 📊 Real-Time Analytics & Downsampling
-- **Downsampling Aggregation (`GET /api/telemetry/aggregate`):**
-  - MongoDB aggregation pipeline leveraging `$dateTrunc` (by second, minute, hour, or day) computing `min`, `max`, `avg` for temperature, vibration, voltage, and CPU load, plus alert counters.
-  - Validates downsampling units (`year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`) and rejects invalid dates with clear error codes.
-- **Latest Reading Inspection (`GET /api/telemetry/latest/:deviceId`):**
-  - Direct index-backed fetch of the most recent telemetry packet for any monitored device.
-- **Anomaly Detection (`GET /api/telemetry/anomalies`):**
-  - Rapid query for out-of-tolerance sensor readings (temperature > 80°C, vibration > 1.0g, or critical status).
-- **Cluster & Bucket Statistics (`GET /api/telemetry/stats`):**
-  - Detailed storage breakdown, bucket count, estimated measurement counts, and compression metrics.
-
-### 🛡️ Dual-Mode Operator Access Console
-- **Sign In & Sign Up Workflows:**
-  - Tailored for factory floor managers, automation engineers, and IoT architects.
-  - Deep-link hash routing (`#login` / `#signup`) with automatic email transfer.
-- **Interactive Telemetry Pipeline Preview:**
-  - Real-time animated simulation visualizing sensor stream pulses and rule trigger alerts.
-- **Security & Client-Side Salted Hashing:**
-  - Per-account cryptographic salt generation with SHA-256 (Web Crypto API + pure-JS fallback).
-- **Robust Field & Password Validations:**
-  - Guarded client-side validators preventing unhandled exceptions when evaluating optional parameters or password matching.
-- **Social Authentication & Account Linking:**
-  - Simulated OAuth flow for Google and Facebook login with automatic identity linking.
+NexusFlow is a full-stack industrial IoT telemetry processing and visual rule orchestration platform. It pairs high-throughput **MongoDB Time-Series Ingestion Engines** (both native driver micro-batching and Mongoose time-series pipelines) with an **RxJS Stream Compiler**, real-time **WebSocket Hub**, a visual **React Flow Canvas**, and an industrial **Operator Access Console**.
 
 ---
 
-## 🛠️ Tech Stack
+## 🚀 System Architecture & Key Capabilities
 
-- **Backend / Ingestion:** [Express 5](https://expressjs.com/), [Node.js](https://nodejs.org/) (native test runner & fetch)
-- **Database:** [MongoDB 8.x / 7.x](https://www.mongodb.com/) (Time-Series Collections, WiredTiger columnar buckets, Connection Pooling)
-- **Database Driver:** [Official MongoDB Node Driver (v7.x)](https://www.mongodb.com/docs/drivers/node/current/)
-- **Frontend Console:** [React 18](https://react.dev/), [Vite 6](https://vitejs.dev/)
-- **Compression & Network:** [compression](https://www.npmjs.com/package/compression), [cors](https://www.npmjs.com/package/cors), [dotenv](https://www.npmjs.com/package/dotenv)
-- **Testing:** Node.js native test runner (`node --test`) across client and server suites (41 tests total, 100% passing).
+NexusFlow provides two cohesive subsystems tailored for edge-to-cloud IoT workflows:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           NexusFlow Architecture                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+              ┌───────────────────────┴───────────────────────┐
+              ▼                                               ▼
+┌──────────────────────────────┐              ┌──────────────────────────────┐
+│  Visual IoT Rule Engine &    │              │  Industrial Time-Series      │
+│  Live WebSocket Canvas       │              │  Ingestion & Operator Console│
+│  (client/ & server/src/)     │              │  (src/ & server/)            │
+├──────────────────────────────┤              ├──────────────────────────────┤
+│ • React Flow Visual Canvas   │              │ • High-Speed Bulk & Micro-   │
+│ • RxJS Stream Compiler       │              │   Batch Ingestion (21k+ w/s) │
+│ • WebSocket Hub & Alerts     │              │ • MongoDB Time-Series Buckets│
+│ • Multi-Rule Fan-Out Runtime │              │ • Downsampling & Anomalies   │
+│ • JWT Per-User Ownership     │              │ • Dual-Mode Operator Console │
+└──────────────────────────────┘              └──────────────────────────────┘
+```
 
 ---
 
-## 📁 Project Structure
+## 🌟 Modules & Deliverables
+
+### 1. Visual IoT Telemetry & Rule Engine (`client/` & `server/src/`)
+
+- **Week 1 Deliverables:**
+  - **MongoDB Time-Series Setup:** native time-series collection (`telemetry`) with `timeField: timestamp`, `metaField: metadata`, and compound indexes (`server/src/config/db.js`).
+  - **Mongoose Telemetry Model:** schema aligned to time-series documents (`server/src/models/Telemetry.js`).
+  - **High-Speed Ingestion Endpoints:** `POST /api/telemetry/ingest`, `GET /recent`, `GET /stats`, `GET /health`.
+  - **Ingestion Audit (`npm run audit:ingestion`):** inserts 5,000 documents across 5 batches in ~0.7 seconds (~7,042 writes/sec) into `nexusflow.telemetry`.
+  - **React Flow Canvas (`client/`):** drag-and-drop node canvas, connectable edges, minimap, controls, and JSON serialization.
+
+- **Week 2 Deliverables:**
+  - **RxJS Stream Compiler (`server/src/compiler/graphCompiler.js`):** converts React Flow JSON graphs into executable RxJS pipelines with live simulation and runtime execution.
+  - **Node Palette:** Data Sources (device/metric filtering), Math Operations (`movingAverage`, `threshold/comparison`, `scale`, `delta`, `passthrough`), Action Triggers (`sms`, `webhook`, `email`, `log`).
+  - **Compiler API (`/api/graphs`):** `/validate`, `/compile` (with activation flag), `/simulate`, `/active`, `/deactivate`.
+  - **Graph Persistence (`/api/graphs/saved`):** CRUD operations for MongoDB graph storage.
+  - **Canvas Node Library:** `DataSourceNode`, `MathOperationNode`, `ActionTriggerNode` with configuration panels.
+
+- **Week 3 Deliverables — Live Rule Execution & WebSockets:**
+  - **Live Rule Runtime (`server/src/services/ruleEngine.js`):** multi-rule fan-out executing incoming telemetry against all active RxJS pipelines.
+  - **WebSocket Hub (`server/src/ws/telemetryHub.js`):** `ws://localhost:5000/ws` with heartbeat, welcome status, reconnect handling, and live alert/telemetry broadcasts.
+  - **Alert Persistence & History (`server/src/models/Alert.js`):** saves fired actions to MongoDB; `GET /api/alerts`.
+  - **Telemetry Mock Simulator (`server/scripts/telemetry-simulator.mjs`):** continuous ingestion streaming.
+  - **Canvas Real-Time Integration:** `useRealtime` hook, live alert drawer, telemetry buffer, and runtime rule toggle.
+
+- **Security & Multi-Rule Concurrency:**
+  - **Authentication:** `scrypt` salted password hashing (`crypto.scrypt` + `timingSafeEqual`), signed JWTs (`jsonwebtoken`), and bearer authentication middleware.
+  - **Per-User Isolation:** saved graphs and alert histories scoped to authenticated user IDs.
+  - **Concurrent Runtimes:** independent active pipeline map allowing multiple rules to evaluate identical telemetry streams concurrently.
+
+---
+
+### 2. Industrial Time-Series Ingestion Engine & Operator Console (`server/` & `src/`)
+
+- **High-Throughput Ingestion Architecture:**
+  - **Native MongoDB Time-Series Setup (`server/config/db.js`, `server/models/telemetryCollection.js`):** automated provisioning of `hardware_telemetry` collection with columnar bucket compression and secondary compound indexes (`idx_device_timestamp`, `idx_facility_timestamp`, `idx_devicetype_timestamp`, `idx_status_timestamp`).
+  - **Synchronous Single-Point Ingestion (`POST /api/telemetry/single`):** sub-millisecond point ingest with zero-overhead schema validation.
+  - **Unordered Bulk Ingestion (`POST /api/telemetry/batch`):** parallel `insertMany({ ordered: false })` achieving **21,700+ writes/second** for up to 10,000 points per payload.
+  - **In-Memory Micro-Batch Buffer (`POST /api/telemetry/buffer`):** non-blocking queue (`202 Accepted`) with configurable flush triggers (1,000 items or 100ms interval) and graceful shutdown drain.
+- **Real-Time Downsampling & Analytics:**
+  - **Time-Series Aggregation (`GET /api/telemetry/aggregate`):** `$dateTrunc` pipeline calculating `min`, `max`, `avg`, and alert counters across arbitrary granularities (second, minute, hour, day).
+  - **Point Lookup & Anomaly Detection:** `GET /api/telemetry/latest/:deviceId`, `GET /api/telemetry/anomalies`, and storage breakdown via `GET /api/telemetry/stats`.
+- **Operator Access Console (`src/`):**
+  - **Dual-Mode Access (`#login` / `#signup`):** deep-linked console with email state preservation and animated stream preview.
+  - **Client-Side Cryptographic Security:** per-account salted SHA-256 password hashing with fallback, social login simulation, and robust form validation.
+
+---
+
+## 📁 Repository Structure
 
 ```text
 project_1/
-├── index.html                           # Operator Console HTML shell
-├── package.json                         # Dependencies, metadata, and scripts
-├── vite.config.js                       # Vite build configuration with React plugin
-├── readme.md                            # Complete synchronized project documentation
-├── AGENTS.md                            # Agent workspace instructions
-├── GEMINI.md                            # Antigravity guidelines
-├── .env                                 # Environment configuration (MongoDB URI, DB name, ports)
-├── .env.example                         # Environment configuration template
-├── server/                              # High-Speed Telemetry Ingestion Engine
-│   ├── index.js                         # Server startup, MongoDB pooling & graceful shutdown
-│   ├── app.js                           # Express application configuration & error handling
-│   ├── config/
-│   │   └── db.js                        # Optimized MongoDB connection pool & status tracker
-│   ├── models/
-│   │   └── telemetryCollection.js       # Time-Series collection schema & index provisioning
-│   ├── middleware/
-│   │   └── validateTelemetry.js         # Zero-overhead validation for single & batch payloads
-│   ├── services/
-│   │   ├── telemetryService.js          # Bulk insertMany, downsampling aggregation, queries
-│   │   └── telemetryBuffer.js           # Micro-batching in-memory queue with graceful shutdown
-│   ├── controllers/
-│   │   └── telemetryController.js       # Sanitized single, batch, buffer, latest, aggregate handlers
-│   ├── routes/
-│   │   └── telemetryRoutes.js           # Express router endpoints (/api/telemetry/*)
-│   ├── scripts/
-│   │   ├── initTimeSeries.js            # Standalone migration script for Time-Series setup
-│   │   └── benchmark.js                 # 5,000+ points high-speed ingestion benchmark
-│   └── tests/
-│       └── telemetry.test.js            # 25 automated integration & unit tests for server
-└── src/                                 # Operator Access Console (Frontend)
-    ├── main.jsx                         # Frontend entry point
-    ├── App.jsx                          # Root React component
-    ├── components/
-    │   ├── AuthSessionCard.jsx          # Profile card upon successful authentication
-    │   ├── BrandLogo.jsx                # NexusFlow brand emblem
-    │   ├── FormFields.jsx               # Inputs, password meter, and social auth buttons
-    │   ├── LoginForm.jsx                # Operator credentials form & password reset
-    │   ├── PipelinePreview.jsx          # Animated telemetry stream simulation
-    │   ├── SignUpForm.jsx               # Registration form with role selector
-    │   └── SocialAuthModal.jsx          # OAuth modal flow
-    ├── pages/
-    │   ├── AuthPage.jsx                 # Dual-column split console layout
-    │   ├── LoginPage.jsx                # Login wrapper
-    │   └── SignUpPage.jsx               # Registration wrapper
-    ├── styles/
-    │   └── index.css                    # Unified dark industrial styling & design tokens
-    └── utils/
-        ├── auth.js                      # Client auth engine, salted hashing, and storage
-        ├── auth.test.js                 # Authentication unit & integration tests
-        ├── validation.js                # Form validation rules & password scorer
-        └── validation.test.js           # Validation test suite
+├── index.html                               # Root Operator Console HTML shell
+├── package.json                             # Root configuration, scripts & dependencies
+├── vite.config.js                           # Root Vite build configuration
+├── readme.md                                # Unified project documentation
+├── AGENTS.md                                # Mandatory agent rules & guidelines
+├── GEMINI.md                                # Workspace guidelines
+├── .env / .env.example                      # Root environment configuration
+│
+├── client/                                  # Visual Canvas Application (React Flow + Vite)
+│   ├── index.html
+│   ├── vite.config.js                       # Proxying /api and /ws to backend
+│   ├── package.json
+│   └── src/
+│       ├── App.jsx                          # Canvas entry component
+│       ├── main.jsx
+│       ├── hooks/                           # useAuth (JWT), useRealtime (WS client)
+│       ├── nodes/                           # DataSourceNode, MathOperationNode, ActionTriggerNode
+│       ├── pages/                           # CanvasPage, LoginPage
+│       ├── styles/                          # Canvas styling & theme tokens
+│       └── utils/                           # format.js, format.test.js, realtime.js
+│
+├── server/                                  # Telemetry & Rule Engine Services
+│   ├── package.json                         # Server dependencies & scripts
+│   ├── index.js                             # Root server entry (Direct MongoDB Driver)
+│   ├── app.js                               # Root Express application config
+│   ├── config/                              # Database connection pools
+│   │   └── db.js
+│   ├── controllers/                         # Root telemetry controllers
+│   │   └── telemetryController.js
+│   ├── middleware/                          # Validation middleware
+│   │   └── validateTelemetry.js
+│   ├── models/                              # Time-Series collection definitions
+│   │   └── telemetryCollection.js
+│   ├── routes/                              # Root telemetry routes
+│   │   └── telemetryRoutes.js
+│   ├── services/                            # Ingestion & Micro-batch buffer
+│   │   ├── telemetryBuffer.js
+│   │   └── telemetryService.js
+│   ├── scripts/                             # Ingestion benchmarks & initialization
+│   │   ├── benchmark.js                     # 5,000+ points high-speed benchmark
+│   │   ├── initTimeSeries.js                # Time-series collection creator
+│   │   ├── ingestion-audit.mjs              # Audit benchmark script
+│   │   ├── realtime-smoke.mjs               # Real-time WebSocket E2E test
+│   │   └── telemetry-simulator.mjs          # Continuous telemetry streamer
+│   ├── tests/                               # Server unit & integration tests
+│   │   └── telemetry.test.js
+│   └── src/                                 # Rule Engine & Compiler Backend (Mongoose + RxJS)
+│       ├── index.js                         # Unified HTTP + WebSocket server
+│       ├── compiler/                        # RxJS graph compiler & compiler test suite
+│       ├── config/                          # Environment & Mongoose connection
+│       ├── controllers/                     # Alert, Auth, Graph, SavedGraph, Telemetry
+│       ├── middleware/                      # Auth middleware (requireAuth, optionalAuth)
+│       ├── models/                          # Mongoose models: Alert, SavedGraph, Telemetry, User
+│       ├── routes/                          # Express route definitions
+│       ├── services/                        # ruleEngine, alertService, authService, eventBus
+│       └── ws/                              # Native WebSocket telemetry hub
+│
+└── src/                                     # Operator Access Console (Frontend)
+    ├── App.jsx                              # Operator console root component
+    ├── main.jsx
+    ├── components/                          # Forms, PipelinePreview, BrandLogo, SocialAuthModal
+    ├── pages/                               # AuthPage, LoginPage, SignUpPage
+    ├── styles/                              # Industrial dark UI styling
+    └── utils/                               # Client auth engine, salted hashing & validation tests
 ```
 
 ---
@@ -130,20 +154,59 @@ project_1/
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (version 18.0.0 or higher)
-- [MongoDB](https://www.mongodb.com/try/download/community) (Local MongoDB instance or MongoDB Compass connected to `mongodb://127.0.0.1:27017/`)
+- [Node.js](https://nodejs.org/) (v18.0.0 or higher)
+- [MongoDB](https://www.mongodb.com/) (v5.0+ required for native Time-Series collections; local instance on `mongodb://127.0.0.1:27017/`)
 
-### 1. Installation
+---
+
+### Option A: Running the Visual Rule Engine & Canvas
+
+#### 1. Start MongoDB & Backend Server
 
 ```bash
-git clone <repository-url>
+cd server
+npm install
+# Set up server/.env
+copy .env.example .env   # On Windows (PowerShell: Copy-Item .env.example .env)
+npm run dev
+```
+
+*Server listens on `http://localhost:5000` with WebSocket endpoint at `ws://localhost:5000/ws`.*
+
+#### 2. Start the Frontend Visual Canvas
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+*Open `http://localhost:5173` to access the visual rule builder.*
+
+#### 3. Test the Rule Pipeline
+
+1. In the Canvas, click **Activate Live** on the default pipeline.
+2. Click **Push Test Telemetry** to trigger alerts in real time.
+3. (Optional) Run the telemetry streamer:
+   ```bash
+   cd server
+   npm run simulate
+   ```
+
+---
+
+### Option B: Running the Ingestion Engine & Operator Console
+
+#### 1. Install Root Dependencies
+
+```bash
 cd project_1
 npm install
 ```
 
-### 2. Environment Configuration
+#### 2. Configure Environment
 
-Create or update `.env` (pre-configured to target your local `nexus` cluster):
+Create or update `.env` in the project root:
 
 ```env
 PORT=5000
@@ -154,139 +217,100 @@ BUFFER_MAX_BATCH_SIZE=1000
 BUFFER_FLUSH_INTERVAL_MS=100
 ```
 
-### 3. Initialize the Time-Series Collection
-
-Run the idempotent initialization script to verify database connectivity and create the `hardware_telemetry` Time-Series collection with secondary indexes:
+#### 3. Initialize Time-Series Collection
 
 ```bash
 npm run server:init
 ```
 
-### 4. Start the Express Ingestion Server
+#### 4. Launch Ingestion Engine & Run Benchmark
 
 ```bash
+# Start server
 npm run server
-```
 
-The ingestion engine will listen on `http://localhost:5000`.
-
-### 5. Run the Ingestion Benchmark
-
-Execute a live benchmark generating 5,000 realistic hardware telemetry records across multiple device types to measure write speed and bucket compression:
-
-```bash
+# In another terminal: execute 5,000-point ingestion benchmark
 npm run server:benchmark
 ```
 
-### 6. Run the Frontend Operator Console
-
-In a separate terminal window, start Vite's local dev server:
+#### 5. Launch Operator Console
 
 ```bash
 npm run dev
 ```
 
-Visit `http://localhost:5173` to interact with the Operator Access Console.
-
----
-
-## 🧪 Automated Testing
-
-NexusFlow includes two comprehensive test suites run using Node.js's native test runner (`node --test`):
-
-- **Run Server & Time-Series Tests (25 tests):**
-  ```bash
-  npm run test:server
-  ```
-- **Run Client Authentication Tests (16 tests):**
-  ```bash
-  npm run test
-  ```
-- **Run All Tests (41 tests total):**
-  ```bash
-  npm run test:all
-  ```
+*Open `http://localhost:5173` to view the Operator Access Console.*
 
 ---
 
 ## 📡 API Reference
 
-### Telemetry Ingestion
+### Telemetry Ingestion & Analytics
 
-#### `POST /api/telemetry/single`
-Ingests a single hardware telemetry record.
-- **Request Body:**
-  ```json
-  {
-    "timestamp": "2026-11-16T10:30:00.000Z",
-    "metadata": {
-      "deviceId": "TURBINE-01",
-      "deviceType": "gas_turbine",
-      "facilityId": "PLANT-NORTH",
-      "rack": "BAY-A",
-      "slot": 1
-    },
-    "metrics": {
-      "temperature_c": 74.5,
-      "vibration_g": 0.22,
-      "voltage_v": 230.1,
-      "current_a": 14.8,
-      "rpm": 3600
-    }
-  }
-  ```
-- **Response (`201 Created`):**
-  ```json
-  {
-    "success": true,
-    "message": "Telemetry point ingested",
-    "insertedId": "...",
-    "durationMs": 1.2
-  }
-  ```
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/telemetry/single` | Synchronous single point ingestion (Native driver) |
+| `POST` | `/api/telemetry/batch` | High-speed unordered bulk ingestion up to 10k points |
+| `POST` | `/api/telemetry/buffer` | In-memory queue with asynchronous micro-batch flush |
+| `POST` | `/api/telemetry/ingest` | Rule Engine ingestion endpoint (triggers active RxJS pipelines) |
+| `GET` | `/api/telemetry/latest/:deviceId` | Retrieve latest indexed sensor packet |
+| `GET` | `/api/telemetry/recent` | Recent telemetry records with device/metric filter |
+| `GET` | `/api/telemetry/aggregate` | Downsampling aggregation (`$dateTrunc` by minute/hour/day) |
+| `GET` | `/api/telemetry/anomalies` | Query out-of-tolerance readings (temp, vibration, critical) |
+| `GET` | `/api/telemetry/stats` | Ingestion & physical storage bucket metrics |
+| `GET` | `/api/health` | Health check probe |
 
-#### `POST /api/telemetry/batch`
-Bulk-ingests an array of up to 10,000 measurements in parallel using unordered writes.
-- **Request Body:** Array of telemetry objects `[...]`
-- **Response (`201 Created`):**
-  ```json
-  {
-    "success": true,
-    "message": "Batch of 1000 points ingested successfully",
-    "count": 1000,
-    "durationMs": 35.0,
-    "pointsPerSecond": 45387
-  }
-  ```
+### Graph Compiler & Live Rule Orchestration
 
-#### `POST /api/telemetry/buffer`
-Micro-batching endpoint that buffers records in memory and flushes them asynchronously.
-- **Response (`202 Accepted`):**
-  ```json
-  {
-    "success": true,
-    "mode": "buffered_single",
-    "enqueued": 1,
-    "queueDepth": 12
-  }
-  ```
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/graphs/validate` | Validate React Flow node/edge structure |
+| `POST` | `/api/graphs/compile` | Compile graph to RxJS stream (supports `activate: true`) |
+| `POST` | `/api/graphs/simulate` | Test events against graph without activating rules |
+| `GET` | `/api/graphs/active` | List running rule runtime IDs and metadata |
+| `POST` | `/api/graphs/deactivate` | Stop a specific runtime (`runtimeId`) or stop all (`all: true`) |
+| `GET/POST` | `/api/graphs/saved` | CRUD endpoints for persisting graphs in MongoDB |
+| `POST` | `/api/graphs/saved/:id/activate` | Activate a saved pipeline by ID |
+| `POST` | `/api/graphs/saved/:id/deactivate` | Deactivate an active saved pipeline |
 
-### Analytics & Queries
+### Authentication & WebSockets
 
-#### `GET /api/telemetry/latest/:deviceId`
-Fetches the most recent metric packet for a device using the compound index.
+| Protocol | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/register` | Register operator account with `scrypt` hashing (returns JWT) |
+| `POST` | `/api/auth/login` | Authenticate credentials and receive JWT |
+| `GET` | `/api/auth/me` | Verify JWT session and fetch profile |
+| `GET` | `/api/alerts` | Query persisted rule trigger alerts (scoped to user) |
+| `WS` | `/ws?token=<jwt>` | Authenticated WebSocket stream (`welcome`, `telemetry`, `alert`, `rule.status`) |
 
-#### `GET /api/telemetry/aggregate?deviceId=TURBINE-01&unit=minute&binSize=1`
-Performs time-series downsampling aggregation via `$dateTrunc`. Returns min, max, average for numeric sensors and alert counts for each time window.
+---
 
-#### `GET /api/telemetry/anomalies?limit=50`
-Queries recent out-of-tolerance sensor readings (`temperature > 80°C`, `vibration > 1.0g`, or `status == "critical"`).
+## 🧪 Automated Testing
 
-#### `GET /api/telemetry/stats`
-Returns physical storage metrics, estimated document counts, and underlying `system.buckets.hardware_telemetry` statistics.
+The repository features comprehensive automated test suites across all layers:
+
+```bash
+# 1. Operator Console Client Tests (16 unit & validation tests)
+npm test
+
+# 2. Ingestion Engine & Time-Series Tests (25 tests)
+npm run test:server
+
+# 3. Run All Root Test Suites (41 tests)
+npm run test:all
+
+# 4. Compiler, Auth & Multi-Rule Tests
+cd server && npm test
+
+# 5. Client Formatting Utility Tests
+cd client && node --test src/utils/format.test.js
+
+# 6. End-to-End Realtime Smoke Test
+cd server && npm run smoke:realtime
+```
 
 ---
 
 ## 🔄 Automatic Documentation Maintenance
 
-As mandated in `AGENTS.md` and `GEMINI.md`, this `readme.md` is kept automatically synchronized with all codebase additions, schema designs, API endpoints, test scripts, and dependencies.
+As mandated in `AGENTS.md` and `GEMINI.md`, this `readme.md` is automatically maintained and kept in continuous synchronization with all database schemas, API routes, client components, and project dependencies.
