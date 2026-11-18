@@ -8,8 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test src/utils/*.test.js",
+    "test:client": "node --test client/src/utils/*.test.js",
     "test:server": "node --test server/tests/*.test.js",
-    "test:all": "node --test src/utils/*.test.js server/tests/*.test.js",
+    "test:all": "node --test src/utils/*.test.js server/tests/*.test.js client/src/utils/*.test.js",
+    "client": "npm --prefix client run dev",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
     "server": "node server/index.js",
     "server:init": "node server/scripts/initTimeSeries.js",
     "server:benchmark": "node server/scripts/benchmark.js"

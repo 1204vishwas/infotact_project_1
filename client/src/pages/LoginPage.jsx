@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 
 export default function LoginPage() {
-  const { login, register } = useAuth();
+  const { login, register, guestLogin } = useAuth();
   const [mode, setMode] = useState('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -103,6 +103,19 @@ export default function LoginPage() {
             {busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
           </button>
         </form>
+
+        <div className="auth-divider">
+          <span>or explore canvas</span>
+        </div>
+
+        <button
+          type="button"
+          className="guest-canvas-btn"
+          onClick={guestLogin}
+          title="Directly open the visual drag-and-drop canvas in guest mode"
+        >
+          Open Visual Canvas in Guest Mode →
+        </button>
 
         <p className="auth-hint">
           {mode === 'login'
