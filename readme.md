@@ -90,9 +90,9 @@ project_1/
 ├── GEMINI.md                                # Workspace guidelines
 ├── .env / .env.example                      # Root environment configuration
 │
-├── client/                                  # Visual Canvas Application (React Flow + Vite)
+├── frontend/                                # Visual Canvas Application (Port 5173 - React Flow + Vite)
 │   ├── index.html
-│   ├── vite.config.js                       # Proxying /api and /ws to backend
+│   ├── vite.config.js                       # Proxying /api and /ws to backend port 5000
 │   ├── package.json
 │   └── src/
 │       ├── App.jsx                          # Canvas entry component
@@ -100,44 +100,34 @@ project_1/
 │       ├── hooks/                           # useAuth (JWT), useRealtime (WS client)
 │       ├── nodes/                           # DataSourceNode, MathOperationNode, ActionTriggerNode
 │       ├── pages/                           # CanvasPage, LoginPage
-│       ├── styles/                          # Canvas styling & theme tokens
+│       ├── styles/                          # Canvas styling, draggable items & theme tokens
 │       └── utils/                           # format.js, canvas.js, canvas.test.js, format.test.js, realtime.js
 │
-├── server/                                  # Telemetry & Rule Engine Services
-│   ├── package.json                         # Server dependencies & scripts
-│   ├── index.js                             # Root server entry (Direct MongoDB Driver)
+├── backend/                                 # Telemetry & Rule Engine Services (Port 5000 - Express + RxJS + WS)
+│   ├── package.json                         # Backend dependencies & dev/start scripts
+│   ├── index.js                             # Direct MongoDB Driver entry
 │   ├── app.js                               # Root Express application config
 │   ├── config/                              # Database connection pools
-│   │   └── db.js
 │   ├── controllers/                         # Root telemetry controllers
-│   │   └── telemetryController.js
 │   ├── middleware/                          # Validation middleware
-│   │   └── validateTelemetry.js
 │   ├── models/                              # Time-Series collection definitions
-│   │   └── telemetryCollection.js
 │   ├── routes/                              # Root telemetry routes
-│   │   └── telemetryRoutes.js
 │   ├── services/                            # Ingestion & Micro-batch buffer
-│   │   ├── telemetryBuffer.js
-│   │   └── telemetryService.js
-│   ├── scripts/                             # Ingestion benchmarks & initialization
-│   │   ├── benchmark.js                     # 5,000+ points high-speed benchmark
-│   │   ├── initTimeSeries.js                # Time-series collection creator
-│   │   ├── ingestion-audit.mjs              # Audit benchmark script
-│   │   ├── realtime-smoke.mjs               # Real-time WebSocket E2E test
-│   │   └── telemetry-simulator.mjs          # Continuous telemetry streamer
+│   ├── scripts/                             # Ingestion benchmarks & simulator
 │   ├── tests/                               # Server unit & integration tests
-│   │   └── telemetry.test.js
-│   └── src/                                 # Rule Engine & Compiler Backend (Mongoose + RxJS)
+│   └── src/                                 # Rule Engine & Compiler Backend (Mongoose + RxJS + WS Hub)
 │       ├── index.js                         # Unified HTTP + WebSocket server
-│       ├── compiler/                        # RxJS graph compiler & compiler test suite
+│       ├── compiler/                        # RxJS graph compiler & tests
 │       ├── config/                          # Environment & Mongoose connection
 │       ├── controllers/                     # Alert, Auth, Graph, SavedGraph, Telemetry
-│       ├── middleware/                      # Auth middleware (requireAuth, optionalAuth)
+│       ├── middleware/                      # Auth middleware
 │       ├── models/                          # Mongoose models: Alert, SavedGraph, Telemetry, User
 │       ├── routes/                          # Express route definitions
 │       ├── services/                        # ruleEngine, alertService, authService, eventBus
 │       └── ws/                              # Native WebSocket telemetry hub
+│
+├── client/                                  # Canvas application source alias
+├── server/                                  # Telemetry & server source alias
 │
 └── src/                                     # Operator Access Console (Frontend)
     ├── App.jsx                              # Operator console root component
@@ -161,39 +151,33 @@ project_1/
 
 ### Option A: Running the Visual Rule Engine & Canvas
 
-#### 1. Start MongoDB & Backend Server
+#### 1. Start the Backend Server (Port 5000)
 
 ```bash
-cd server
-npm install
-# Set up server/.env
-copy .env.example .env   # On Windows (PowerShell: Copy-Item .env.example .env)
+cd backend
 npm run dev
 ```
 
-*Server listens on `http://localhost:5000` with WebSocket endpoint at `ws://localhost:5000/ws`.*
+*Backend server listens on `http://localhost:5000` with WebSocket telemetry hub at `ws://localhost:5000/ws`.*
 
-#### 2. Start the Frontend Visual Canvas
+#### 2. Start the Frontend Visual Canvas (Port 5173)
 
 ```bash
-# Option 1: Direct from root workspace
-npm run client:dev
-
-# Option 2: From client directory
-cd client
-npm install
+cd frontend
 npm run dev
 ```
 
-*Open `http://localhost:5173` to access the visual rule builder.*
+*Frontend starts Vite dev server at `http://localhost:5173`, automatically proxying `/api` and `/ws` to the backend on port 5000.*
 
 #### 3. Test the Rule Pipeline
 
-1. In the Canvas, click **Activate Live** on the default pipeline.
-2. Click **Push Test Telemetry** to trigger alerts in real time.
-3. (Optional) Run the telemetry streamer:
+1. Open `http://localhost:5173` in your browser.
+2. Click **"Open Visual Canvas in Guest Mode →"** or log in.
+3. In the Canvas, click **Activate Live** on the default pipeline.
+4. Click **Push Test Telemetry** to trigger alerts in real time.
+5. (Optional) Run the continuous telemetry simulator:
    ```bash
-   cd server
+   cd backend
    npm run simulate
    ```
 
@@ -297,20 +281,20 @@ The repository features comprehensive automated test suites across all layers:
 # 1. Operator Console Client Tests (16 unit & validation tests)
 npm test
 
-# 2. Visual Canvas & Node Placement Tests (8 unit tests)
-npm run test:client
+# 2. Visual Canvas Drag-and-Drop & Utilities (8 unit tests)
+npm run test:frontend
 
-# 3. Ingestion Engine & Time-Series Tests (25 tests)
-npm run test:server
+# 3. Ingestion Engine & Time-Series Tests
+npm run test:backend
 
 # 4. Run All Test Suites
 npm run test:all
 
 # 5. Compiler, Auth & Multi-Rule Tests
-cd server && npm test
+cd backend && npm test
 
 # 6. End-to-End Realtime Smoke Test
-cd server && npm run smoke:realtime
+cd backend && npm run smoke:realtime
 ```
 
 ---
