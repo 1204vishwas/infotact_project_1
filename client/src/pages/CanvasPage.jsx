@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   addEdge,
   Background,
   Controls,
   MiniMap,
   Panel,
+  ReactFlowProvider,
   useEdgesState,
   useNodesState,
 } from 'reactflow';
@@ -14,74 +15,81 @@ import { MathOperationNode } from '../nodes/MathOperationNode';
 import { ActionTriggerNode } from '../nodes/ActionTriggerNode';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../hooks/useAuth';
+import {
+  NODE_LIBRARY,
+  createCanvasNode,
+  serializeGraph,
+  calculateDropPosition,
+} from '../utils/canvas';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
-const NODE_LIBRARY = [
-  {
-    category: 'Data Sources',
-    items: [
-      { label: 'Sensor Source', type: 'dataSource', defaults: { label: 'Turbine Sensor', kind: 'sensor', deviceId: 'turbine-01', metric: 'temperature', unit: 'C' } },
-      { label: 'Simulator', type: 'dataSource', defaults: { label: 'Telemetry Simulator', kind: 'simulator', deviceId: 'sim-01', metric: 'temperature', unit: 'C' } },
+const PRESET_TEMPLATES = {
+  default: {
+    name: 'Turbine Overheat Pipeline',
+    nodes: [
+      {
+        id: 'source-1',
+        type: 'dataSource',
+        position: { x: 80, y: 180 },
+        data: { label: 'Turbine Sensor', kind: 'sensor', deviceId: 'turbine-01', metric: 'temperature', unit: 'C' },
+      },
+      {
+        id: 'math-1',
+        type: 'mathOperation',
+        position: { x: 360, y: 120 },
+        data: { label: 'Moving Average', kind: 'movingAverage', windowSize: 5 },
+      },
+      {
+        id: 'math-2',
+        type: 'mathOperation',
+        position: { x: 360, y: 280 },
+        data: { label: 'Threshold Check', kind: 'threshold', operator: '>', threshold: 80, field: 'value' },
+      },
+      {
+        id: 'action-1',
+        type: 'actionTrigger',
+        position: { x: 660, y: 200 },
+        data: { label: 'SMS Alert', kind: 'sms', channel: 'sms', target: '+10000000000', message: 'Turbine temperature above threshold' },
+      },
+    ],
+    edges: [
+      { id: 'e-source-ma', source: 'source-1', target: 'math-1', type: 'smoothstep' },
+      { id: 'e-ma-th', source: 'math-1', target: 'math-2', type: 'smoothstep' },
+      { id: 'e-th-action', source: 'math-2', target: 'action-1', type: 'smoothstep' },
     ],
   },
-  {
-    category: 'Math Operations',
-    items: [
-      { label: 'Moving Average', type: 'mathOperation', defaults: { label: 'Moving Average', kind: 'movingAverage', windowSize: 5 } },
-      { label: 'Threshold', type: 'mathOperation', defaults: { label: 'Threshold Check', kind: 'threshold', operator: '>', threshold: 80, field: 'value' } },
-      { label: 'Scale / Offset', type: 'mathOperation', defaults: { label: 'Scale / Offset', kind: 'scale', factor: 1, offset: 0 } },
-      { label: 'Delta', type: 'mathOperation', defaults: { label: 'Delta', kind: 'delta' } },
+  anomaly: {
+    name: 'Vibration Anomaly Spike',
+    nodes: [
+      {
+        id: 'source-1',
+        type: 'dataSource',
+        position: { x: 80, y: 180 },
+        data: { label: 'Floor 1 Gateway', kind: 'gateway', deviceId: 'gw-floor-1', metric: 'vibration', unit: 'mm/s' },
+      },
+      {
+        id: 'math-1',
+        type: 'mathOperation',
+        position: { x: 360, y: 180 },
+        data: { label: 'Delta Spike Detection', kind: 'delta' },
+      },
+      {
+        id: 'action-1',
+        type: 'actionTrigger',
+        position: { x: 660, y: 180 },
+        data: { label: 'Webhook Alert', kind: 'webhook', channel: 'webhook', target: 'https://example.com/alerts/vibration', message: 'Vibration anomaly detected' },
+      },
+    ],
+    edges: [
+      { id: 'e-vibe-delta', source: 'source-1', target: 'math-1', type: 'smoothstep' },
+      { id: 'e-delta-hook', source: 'math-1', target: 'action-1', type: 'smoothstep' },
     ],
   },
-  {
-    category: 'Action Triggers',
-    items: [
-      { label: 'SMS Alert', type: 'actionTrigger', defaults: { label: 'SMS Alert', kind: 'sms', channel: 'sms', target: '+10000000000', message: 'Threshold exceeded' } },
-      { label: 'Webhook', type: 'actionTrigger', defaults: { label: 'Webhook', kind: 'webhook', channel: 'webhook', target: 'https://example.com/hook', url: 'https://example.com/hook', message: 'Rule triggered' } },
-      { label: 'Log Alert', type: 'actionTrigger', defaults: { label: 'Log Alert', kind: 'log', channel: 'log', target: 'server-log', message: 'Rule triggered' } },
-    ],
-  },
-];
+};
 
-const initialNodes = [
-  {
-    id: 'source-1',
-    type: 'dataSource',
-    position: { x: 80, y: 180 },
-    data: { label: 'Turbine Sensor', kind: 'sensor', deviceId: 'turbine-01', metric: 'temperature', unit: 'C' },
-  },
-  {
-    id: 'math-1',
-    type: 'mathOperation',
-    position: { x: 360, y: 120 },
-    data: { label: 'Moving Average', kind: 'movingAverage', windowSize: 5 },
-  },
-  {
-    id: 'math-2',
-    type: 'mathOperation',
-    position: { x: 360, y: 280 },
-    data: { label: 'Threshold Check', kind: 'threshold', operator: '>', threshold: 80, field: 'value' },
-  },
-  {
-    id: 'action-1',
-    type: 'actionTrigger',
-    position: { x: 660, y: 200 },
-    data: { label: 'SMS Alert', kind: 'sms', channel: 'sms', target: '+10000000000', message: 'Turbine temperature above threshold' },
-  },
-];
-
-const initialEdges = [
-  { id: 'e-source-ma', source: 'source-1', target: 'math-1' },
-  { id: 'e-ma-th', source: 'math-1', target: 'math-2' },
-  { id: 'e-th-action', source: 'math-2', target: 'action-1' },
-];
-
-let idCounter = 10;
-function nextId(prefix) {
-  idCounter += 1;
-  return `${prefix}-${idCounter}`;
-}
+const initialNodes = PRESET_TEMPLATES.default.nodes;
+const initialEdges = PRESET_TEMPLATES.default.edges;
 
 function toNumberOr(value, fallback) {
   if (value === '' || value === null || value === undefined) return fallback;
@@ -298,7 +306,10 @@ function NodeConfigPanel({ node, onChange }) {
   );
 }
 
-export default function CanvasPage() {
+function CanvasFlowInner() {
+  const reactFlowWrapper = useRef(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState(null);
+
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
@@ -339,7 +350,6 @@ export default function CanvasPage() {
       dataSource: DataSourceNode,
       mathOperation: MathOperationNode,
       actionTrigger: ActionTriggerNode,
-      // legacy aliases
       source: DataSourceNode,
       filter: MathOperationNode,
       action: ActionTriggerNode,
@@ -355,7 +365,7 @@ export default function CanvasPage() {
       const json = await res.json().catch(() => ({}));
       if (res.ok) setSavedGraphs(Array.isArray(json.items) ? json.items : []);
     } catch {
-      // Keep the canvas usable when the API is offline.
+      // Keep canvas operational when offline
     }
   }, [authFetch]);
 
@@ -365,7 +375,7 @@ export default function CanvasPage() {
       const json = await res.json().catch(() => ({}));
       if (res.ok) setServerRuleStatus(json);
     } catch {
-      // The WebSocket status will update once connected.
+      // Handled via WebSocket status
     }
   }, [authFetch]);
 
@@ -392,27 +402,87 @@ export default function CanvasPage() {
   const onNodeClick = useCallback((_evt, node) => setSelectedNodeId(node.id), []);
   const onPaneClick = useCallback(() => setSelectedNodeId(null), []);
 
-  const addNode = (type, defaults) => {
-    const position = { x: 120 + Math.random() * 420, y: 80 + Math.random() * 260 };
-    const prefix = type === 'dataSource' ? 'source' : type === 'mathOperation' ? 'math' : 'action';
-    let id;
-    do {
-      id = nextId(prefix);
-    } while (nodes.some((node) => node.id === id));
+  const addNode = useCallback(
+    (type, defaults, positionOverride = null) => {
+      const position =
+        positionOverride || {
+          x: 120 + Math.random() * 320,
+          y: 80 + Math.random() * 220,
+        };
+      const newNode = createCanvasNode(type, defaults, position, nodes);
+      setNodes((nds) => nds.concat(newNode));
+      setSelectedNodeId(newNode.id);
+      return newNode;
+    },
+    [nodes, setNodes]
+  );
 
-    setNodes((nds) => nds.concat({ id, type, position, data: { ...defaults } }));
-    setSelectedNodeId(id);
+  const onDragStart = (event, nodeType, defaults) => {
+    event.dataTransfer.setData('application/reactflow/type', nodeType);
+    event.dataTransfer.setData('application/reactflow/defaults', JSON.stringify(defaults));
+    event.dataTransfer.effectAllowed = 'move';
   };
 
-  const updateNodeData = useCallback((id, data) => {
-    setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data } : n)));
-  }, [setNodes]);
+  const onDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+
+      const type = event.dataTransfer.getData('application/reactflow/type');
+      if (!type) return;
+
+      let defaults = {};
+      try {
+        const raw = event.dataTransfer.getData('application/reactflow/defaults');
+        if (raw) defaults = JSON.parse(raw);
+      } catch {
+        defaults = {};
+      }
+
+      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
+      const position = calculateDropPosition(event, bounds, reactFlowInstance);
+      addNode(type, defaults, position);
+    },
+    [addNode, reactFlowInstance]
+  );
+
+  const updateNodeData = useCallback(
+    (id, data) => {
+      setNodes((nds) => nds.map((n) => (n.id === id ? { ...n, data } : n)));
+    },
+    [setNodes]
+  );
 
   const deleteSelected = () => {
     if (!selectedNodeId) return;
     setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
     setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
     setSelectedNodeId(null);
+  };
+
+  const onNodesDelete = useCallback(
+    (deletedNodes) => {
+      if (deletedNodes.some((n) => n.id === selectedNodeId)) {
+        setSelectedNodeId(null);
+      }
+    },
+    [selectedNodeId]
+  );
+
+  const loadTemplate = (templateKey) => {
+    const template = PRESET_TEMPLATES[templateKey];
+    if (!template) return;
+    setNodes(template.nodes);
+    setEdges(template.edges);
+    setGraphName(template.name);
+    setSelectedNodeId(null);
+    setLoadedGraphId(null);
+    setCompileResult(null);
+    setOutputTab('output');
   };
 
   const newGraph = () => {
@@ -426,21 +496,9 @@ export default function CanvasPage() {
     setOutputTab('output');
   };
 
-  const buildGraph = () => ({
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data })),
-    edges: edges.map(({ id, source, target, sourceHandle, targetHandle, type }) => ({
-      id,
-      source,
-      target,
-      sourceHandle: sourceHandle ?? null,
-      targetHandle: targetHandle ?? null,
-      type: type ?? 'default',
-    })),
-  });
+  const buildGraph = () => serializeGraph(nodes, edges);
 
-  const serializeGraph = () => {
+  const serializeGraphAction = () => {
     setSerialized(JSON.stringify(buildGraph(), null, 2));
     setOutputTab('output');
   };
@@ -468,14 +526,15 @@ export default function CanvasPage() {
 
   const validateGraph = () => callCompiler('/api/graphs/validate', { graph: buildGraph() });
   const compileGraph = () => callCompiler('/api/graphs/compile', { graph: buildGraph() });
-  const simulateGraph = () => callCompiler('/api/graphs/simulate', {
-    graph: buildGraph(),
-    events: [
-      { deviceId: 'turbine-01', metric: 'temperature', value: 78, unit: 'C' },
-      { deviceId: 'turbine-01', metric: 'temperature', value: 82, unit: 'C' },
-      { deviceId: 'turbine-01', metric: 'temperature', value: 85, unit: 'C' },
-    ],
-  });
+  const simulateGraph = () =>
+    callCompiler('/api/graphs/simulate', {
+      graph: buildGraph(),
+      events: [
+        { deviceId: 'turbine-01', metric: 'temperature', value: 78, unit: 'C' },
+        { deviceId: 'turbine-01', metric: 'temperature', value: 82, unit: 'C' },
+        { deviceId: 'turbine-01', metric: 'temperature', value: 85, unit: 'C' },
+      ],
+    });
 
   const activateGraph = async () => {
     const graph = buildGraph();
@@ -622,7 +681,7 @@ export default function CanvasPage() {
         target: String(edge.target),
         sourceHandle: edge.sourceHandle ?? null,
         targetHandle: edge.targetHandle ?? null,
-        type: edge.type || 'default',
+        type: edge.type || 'smoothstep',
       }));
 
       setNodes(nextNodes);
@@ -683,6 +742,10 @@ export default function CanvasPage() {
           <button className="link-button" onClick={logout}>Sign out</button>
         </div>
         <div className="toolbar">
+          <div className="toolbar-group">
+            <button onClick={() => loadTemplate('default')} title="Load default turbine pipeline">Turbine Template</button>
+            <button onClick={() => loadTemplate('anomaly')} title="Load vibration anomaly pipeline">Anomaly Template</button>
+          </div>
           <button onClick={validateGraph} disabled={busy}>Validate</button>
           <button onClick={compileGraph} disabled={busy}>Compile</button>
           <button onClick={simulateGraph} disabled={busy}>Simulate</button>
@@ -693,21 +756,41 @@ export default function CanvasPage() {
             <button className="danger" onClick={() => deactivateGraph(null)} disabled={busy}>Stop All</button>
           )}
           <button onClick={sendTestTelemetry} disabled={busy}>Push Test Telemetry</button>
-          <button onClick={serializeGraph}>Serialize</button>
+          <button onClick={serializeGraphAction}>Serialize</button>
         </div>
       </header>
 
       <main className="workspace workspace-week2">
         <aside className="palette">
-          <div className="palette-header"><h2>Node Library</h2></div>
+          <div className="palette-header">
+            <h2>Node Library</h2>
+          </div>
+          <div className="palette-instruction">
+            Drag nodes onto canvas or click <strong>+</strong> to add.
+          </div>
           {NODE_LIBRARY.map((group) => (
             <div key={group.category} className="palette-group">
               <div className="palette-group-title">{group.category}</div>
               <div className="palette-items">
                 {group.items.map((item) => (
-                  <button key={item.label} className="palette-item" onClick={() => addNode(item.type, item.defaults)}>
-                    + {item.label}
-                  </button>
+                  <div
+                    key={item.label}
+                    className="palette-item-draggable"
+                    draggable
+                    onDragStart={(e) => onDragStart(e, item.type, item.defaults)}
+                    title={`Drag ${item.label} onto canvas`}
+                  >
+                    <span className="drag-handle">⋮⋮</span>
+                    <span className="item-label">{item.label}</span>
+                    <button
+                      type="button"
+                      className="palette-add-btn"
+                      onClick={() => addNode(item.type, item.defaults)}
+                      title={`Add ${item.label} to canvas`}
+                    >
+                      +
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -753,6 +836,7 @@ export default function CanvasPage() {
 
           <div className="palette-help">
             <div><strong>Flow:</strong> Data Source → Math Operation(s) → Action Trigger</div>
+            <div><strong>Drag &amp; Drop:</strong> Drag nodes anywhere onto the canvas.</div>
             <div><strong>Live rule:</strong> Activate Live, then Push Test Telemetry.</div>
             <div><strong>Multi-rule:</strong> ▶ on a saved graph keeps it running alongside others.</div>
             <div><strong>WS:</strong> <code>{wsUrl}</code></div>
@@ -760,23 +844,38 @@ export default function CanvasPage() {
           </div>
         </aside>
 
-        <section className="canvas-wrap">
+        <section className="canvas-wrap" ref={reactFlowWrapper}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onInit={setReactFlowInstance}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onNodesDelete={onNodesDelete}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={nodeTypes}
+            deleteKeyCode={['Backspace', 'Delete']}
             fitView
           >
             <Background gap={18} size={1} />
-            <MiniMap pannable zoomable />
+            <MiniMap
+              nodeColor={(node) => {
+                if (node.type === 'dataSource' || node.type === 'source') return '#3b82f6';
+                if (node.type === 'mathOperation' || node.type === 'filter') return '#8b5cf6';
+                if (node.type === 'actionTrigger' || node.type === 'action') return '#10b981';
+                return '#475569';
+              }}
+              nodeStrokeWidth={2}
+              pannable
+              zoomable
+            />
             <Controls />
             <Panel position="top-left" className="hint-panel">
-              Drag from handles to connect. Select a node to edit config. Activate the canvas or a saved graph to run rules; multiple rules run side by side.
+              Drag nodes from the palette or handles to connect. Press <strong>Delete/Backspace</strong> to remove. Activate to run rules in real-time.
             </Panel>
             <Panel position="top-right" className={`live-alert-panel ${alerts.length ? 'active' : ''}`}>
               <div className="live-alert-title">Live Alerts <span>{alerts.length}</span></div>
@@ -789,9 +888,7 @@ export default function CanvasPage() {
                   </div>
                 </>
               ) : (
-                <div className="live-alert-empty">
-                  {isActive ? 'Waiting for a rule match…' : 'Activate a rule to receive alerts'}
-                </div>
+                <div className="live-alert-empty">No alerts received yet.</div>
               )}
             </Panel>
           </ReactFlow>
@@ -874,5 +971,13 @@ export default function CanvasPage() {
         </aside>
       </main>
     </div>
+  );
+}
+
+export default function CanvasPage() {
+  return (
+    <ReactFlowProvider>
+      <CanvasFlowInner />
+    </ReactFlowProvider>
   );
 }

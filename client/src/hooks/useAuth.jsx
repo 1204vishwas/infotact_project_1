@@ -86,6 +86,12 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => persist(null, null), [persist]);
 
+  const guestLogin = useCallback(() => {
+    const guestUser = { id: 'guest-operator', name: 'Demo Operator', email: 'operator@nexusflow.local' };
+    persist('guest-token', guestUser);
+    return guestUser;
+  }, [persist]);
+
   const authFetch = useCallback((path, options = {}) => {
     const headers = { ...(options.headers || {}) };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -93,8 +99,8 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const value = useMemo(
-    () => ({ user, token, loading, login, register, logout, authFetch }),
-    [user, token, loading, login, register, logout, authFetch]
+    () => ({ user, token, loading, login, register, logout, guestLogin, authFetch }),
+    [user, token, loading, login, register, logout, guestLogin, authFetch]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

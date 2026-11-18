@@ -39,7 +39,7 @@ NexusFlow provides two cohesive subsystems tailored for edge-to-cloud IoT workfl
   - **Mongoose Telemetry Model:** schema aligned to time-series documents (`server/src/models/Telemetry.js`).
   - **High-Speed Ingestion Endpoints:** `POST /api/telemetry/ingest`, `GET /recent`, `GET /stats`, `GET /health`.
   - **Ingestion Audit (`npm run audit:ingestion`):** inserts 5,000 documents across 5 batches in ~0.7 seconds (~7,042 writes/sec) into `nexusflow.telemetry`.
-  - **React Flow Canvas (`client/`):** drag-and-drop node canvas, connectable edges, minimap, controls, and JSON serialization.
+  - **React Flow Canvas (`client/`):** drag-and-drop node canvas, connectable edges, minimap, controls, and JSON serialization. Features HTML5 native drag-and-drop from the Node Library palette directly onto the canvas with real-time coordinate projection (`screenToFlowPosition` / `project`), visual drag handles, quick click-to-add buttons, semantic MiniMap node coloring, template presets, and guest demo access.
 
 - **Week 2 Deliverables:**
   - **RxJS Stream Compiler (`server/src/compiler/graphCompiler.js`):** converts React Flow JSON graphs into executable RxJS pipelines with live simulation and runtime execution.
@@ -101,7 +101,7 @@ project_1/
 │       ├── nodes/                           # DataSourceNode, MathOperationNode, ActionTriggerNode
 │       ├── pages/                           # CanvasPage, LoginPage
 │       ├── styles/                          # Canvas styling & theme tokens
-│       └── utils/                           # format.js, format.test.js, realtime.js
+│       └── utils/                           # format.js, canvas.js, canvas.test.js, format.test.js, realtime.js
 │
 ├── server/                                  # Telemetry & Rule Engine Services
 │   ├── package.json                         # Server dependencies & scripts
@@ -176,6 +176,10 @@ npm run dev
 #### 2. Start the Frontend Visual Canvas
 
 ```bash
+# Option 1: Direct from root workspace
+npm run client:dev
+
+# Option 2: From client directory
 cd client
 npm install
 npm run dev
@@ -293,17 +297,17 @@ The repository features comprehensive automated test suites across all layers:
 # 1. Operator Console Client Tests (16 unit & validation tests)
 npm test
 
-# 2. Ingestion Engine & Time-Series Tests (25 tests)
+# 2. Visual Canvas & Node Placement Tests (8 unit tests)
+npm run test:client
+
+# 3. Ingestion Engine & Time-Series Tests (25 tests)
 npm run test:server
 
-# 3. Run All Root Test Suites (41 tests)
+# 4. Run All Test Suites
 npm run test:all
 
-# 4. Compiler, Auth & Multi-Rule Tests
+# 5. Compiler, Auth & Multi-Rule Tests
 cd server && npm test
-
-# 5. Client Formatting Utility Tests
-cd client && node --test src/utils/format.test.js
 
 # 6. End-to-End Realtime Smoke Test
 cd server && npm run smoke:realtime
