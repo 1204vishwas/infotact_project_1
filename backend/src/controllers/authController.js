@@ -75,6 +75,46 @@ export async function login(req, res) {
   }
 }
 
+export async function socialLogin(req, res) {
+  try {
+    const provider = String(req.body?.provider || 'google').toLowerCase();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const name = String(req.body?.name || '').trim() || (email ? email.split('@')[0] : 'Operator');
+    const avatar = req.body?.avatar || null;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required for social authentication' });
+    }
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = await User.create({
+        name,
+        email,
+        passwordHash: null,
+        provider,
+        avatar,
+      });
+    } else {
+      if (!user.provider || user.provider === 'password') {
+        user.provider = provider;
+      }
+      if (avatar && !user.avatar) {
+        user.avatar = avatar;
+      }
+      await user.save();
+    }
+
+    return res.json({
+      ok: true,
+      token: signToken(user),
+      user: publicUser(user),
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Social authentication failed', detail: error.message });
+  }
+}
+
 export async function me(req, res) {
   try {
     const user = await User.findById(req.user.id).lean();

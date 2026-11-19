@@ -322,6 +322,7 @@ function CanvasFlowInner() {
   const [savedBusy, setSavedBusy] = useState(false);
   const [outputTab, setOutputTab] = useState('output');
   const [serverRuleStatus, setServerRuleStatus] = useState(null);
+  const [mobileView, setMobileView] = useState('canvas'); // 'library' | 'canvas' | 'sidebar'
 
   const { user, token, logout, authFetch } = useAuth();
 
@@ -738,7 +739,17 @@ function CanvasFlowInner() {
               : 'No active rules'}
           </span>
           {lastError ? <span className="live-error">{lastError}</span> : null}
-          <span className="user-chip" title={user?.email || ''}>{user?.name || user?.email}</span>
+          <span className="user-chip" title={`${user?.name || user?.email} (${user?.provider || 'session'})`}>
+            {user?.provider === 'google' && <span className="provider-badge google">G</span>}
+            {user?.provider === 'facebook' && <span className="provider-badge facebook">f</span>}
+            {user?.provider === 'demo' && <span className="provider-badge demo">Demo</span>}
+            {user?.provider === 'guest' && <span className="provider-badge guest">Guest</span>}
+            {(!user?.provider || user?.provider === 'email' || user?.provider === 'password') && (
+              <span className="provider-badge email">✉</span>
+            )}
+            <span className="user-name-text">{user?.name || user?.email}</span>
+            {user?.isOffline && <span className="offline-tag">Local</span>}
+          </span>
           <button className="link-button" onClick={logout}>Sign out</button>
         </div>
         <div className="toolbar">
@@ -760,7 +771,35 @@ function CanvasFlowInner() {
         </div>
       </header>
 
-      <main className="workspace workspace-week2">
+      {/* Mobile Workspace View Switcher (< 960px) */}
+      <nav className="mobile-view-nav" aria-label="Mobile workspace view switcher">
+        <button
+          type="button"
+          className={`mobile-tab-btn ${mobileView === 'library' ? 'active' : ''}`}
+          onClick={() => setMobileView('library')}
+        >
+          <span className="mobile-tab-icon">📚</span>
+          <span>Node Library</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-tab-btn ${mobileView === 'canvas' ? 'active' : ''}`}
+          onClick={() => setMobileView('canvas')}
+        >
+          <span className="mobile-tab-icon">⚡</span>
+          <span>Rule Canvas</span>
+        </button>
+        <button
+          type="button"
+          className={`mobile-tab-btn ${mobileView === 'sidebar' ? 'active' : ''}`}
+          onClick={() => setMobileView('sidebar')}
+        >
+          <span className="mobile-tab-icon">📊</span>
+          <span>Output &amp; Alerts</span>
+        </button>
+      </nav>
+
+      <main className={`workspace workspace-week2 mobile-view-${mobileView}`}>
         <aside className="palette">
           <div className="palette-header">
             <h2>Node Library</h2>

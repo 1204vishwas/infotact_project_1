@@ -60,10 +60,15 @@ NexusFlow provides two cohesive subsystems tailored for edge-to-cloud IoT workfl
   - **Telemetry Mock Simulator (`server/scripts/telemetry-simulator.mjs`):** continuous ingestion streaming.
   - **Canvas Real-Time Integration:** `useRealtime` hook, live alert drawer, telemetry buffer, and runtime rule toggle.
 
-- **Security & Multi-Rule Concurrency:**
-  - **Authentication:** `scrypt` salted password hashing (`crypto.scrypt` + `timingSafeEqual`), signed JWTs (`jsonwebtoken`), and bearer authentication middleware.
-  - **Per-User Isolation:** saved graphs and alert histories scoped to authenticated user IDs.
-  - **Concurrent Runtimes:** independent active pipeline map allowing multiple rules to evaluate identical telemetry streams concurrently.
+- **Security, Multi-Provider Authentication & Full Responsiveness:**
+  - **Multi-Provider Authentication:** Sign in with Google (OAuth & profile simulation), Facebook, Email & password (`scrypt` salted hashing), 1-click Demo Operator login, or instant Guest Canvas access.
+  - **Offline & Downtime Resilience:** Resilient local storage fallback (`localStorage`) prevents "Request failed" lockouts whenever the backend or MongoDB is offline—allowing operators to always access and edit visual rule graphs immediately.
+  - **Per-User Isolation:** Saved graphs and alert histories securely scoped to authenticated user IDs and linked provider sessions.
+  - **Full Responsiveness across All Devices:**
+    - Mobile-first adaptive layout supporting smartphones (320px–480px), tablets (481px–960px), and wide monitors.
+    - Mobile Workspace View Switcher (`mobile-view-nav`) toggling seamlessly between **Node Library**, **Rule Canvas**, and **Output & Alerts**.
+    - Touch-optimized node addition (+ tap buttons alongside drag-and-drop), touch controls, and smart minimap suppression on mobile screens.
+  - **Concurrent Runtimes:** Independent active pipeline map allowing multiple rules to evaluate identical telemetry streams concurrently.
 
 ---
 
@@ -272,6 +277,7 @@ npm run dev
 |---|---|---|
 | `POST` | `/api/auth/register` | Register operator account with `scrypt` hashing (returns JWT) |
 | `POST` | `/api/auth/login` | Authenticate credentials and receive JWT |
+| `POST` | `/api/auth/social` | Authenticate or provision via Google or Facebook OAuth session |
 | `GET` | `/api/auth/me` | Verify JWT session and fetch profile |
 | `GET` | `/api/alerts` | Query persisted rule trigger alerts (scoped to user) |
 | `WS` | `/ws?token=<jwt>` | Authenticated WebSocket stream (`welcome`, `telemetry`, `alert`, `rule.status`) |

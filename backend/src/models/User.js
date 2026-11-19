@@ -12,7 +12,9 @@ const userSchema = new mongoose.Schema(
       index: true,
       maxlength: 200,
     },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, default: null },
+    provider: { type: String, default: 'password' },
+    avatar: { type: String, default: null },
   },
   {
     timestamps: true,

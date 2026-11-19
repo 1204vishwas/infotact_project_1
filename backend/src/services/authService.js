@@ -56,6 +56,8 @@ export function publicUser(user) {
     id: String(user._id ?? user.id),
     name: user.name,
     email: user.email,
+    provider: user.provider || 'password',
+    avatar: user.avatar || null,
     createdAt: user.createdAt || null,
   };
 }
