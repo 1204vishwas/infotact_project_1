@@ -41,9 +41,14 @@ NexusFlow provides two cohesive subsystems tailored for edge-to-cloud IoT workfl
   - **Ingestion Audit (`npm run audit:ingestion`):** inserts 5,000 documents across 5 batches in ~0.7 seconds (~7,042 writes/sec) into `nexusflow.telemetry`.
   - **React Flow Canvas (`client/`):** drag-and-drop node canvas, connectable edges, minimap, controls, and JSON serialization. Features HTML5 native drag-and-drop from the Node Library palette directly onto the canvas with real-time coordinate projection (`screenToFlowPosition` / `project`), visual drag handles, quick click-to-add buttons, semantic MiniMap node coloring, template presets, and guest demo access.
 
-- **Week 2 Deliverables:**
-  - **RxJS Stream Compiler (`server/src/compiler/graphCompiler.js`):** converts React Flow JSON graphs into executable RxJS pipelines with live simulation and runtime execution.
-  - **Node Palette:** Data Sources (device/metric filtering), Math Operations (`movingAverage`, `threshold/comparison`, `scale`, `delta`, `passthrough`), Action Triggers (`sms`, `webhook`, `email`, `log`).
+- **Week 2 Deliverables — Logic Compiler Engine:**
+  - **RxJS Stream Compiler (`server/src/compiler/graphCompiler.js` & `server/src/compiler/index.js`):** Node.js engine that parses saved React Flow JSON graphs (raw objects, serialized JSON, or wrapped MongoDB `SavedGraph` schemas) and converts them into executable RxJS data streams with cycle-safe DAG execution, multi-node fan-in/fan-out, and live simulation.
+  - **Graph Parsing & Normalization (`parseReactFlow`, `normalizeGraph`):** robust deserialization handling React Flow viewports, node types, coordinate projections, and handles.
+  - **Topological Validation (`validateGraph`):** Kahn's algorithm cycle detection, terminal action verification, missing reference checks, duplicate ID detection, and dead-end/isolated node diagnostics.
+  - **Transform & Math Operation Suite:** `movingAverage` (sliding window), `threshold/comparison` (`>`, `>=`, `<`, `<=`, `==`, `!=`, `between`, `outside`), `scale` (factor & offset), `delta` (differential change), `rateOfChange` (units/second), `min`/`max` accumulators, and `passthrough`.
+  - **Action Triggers & Message Templating:** `sms`, `webhook`, `email`, `log`, `alert` channels with template variable interpolation (`{deviceId}`, `{metric}`, `{value}`, `{threshold}`).
+  - **RxJSRuntime Engine:** lifecycle-managed reactive pipeline providing `ingress$`, `actions$`, `traces$`, `errors$`, per-node stream taps (`getNodeStream`), direct node injection (`pushToNode`), batch execution, and clean `destroy()` teardown.
+  - **Dynamic Compiler Registry (`LogicCompiler`):** dynamic registration of custom math operations and custom action channels at runtime.
   - **Compiler API (`/api/graphs`):** `/validate`, `/compile` (with activation flag), `/simulate`, `/active`, `/deactivate`.
   - **Graph Persistence (`/api/graphs/saved`):** CRUD operations for MongoDB graph storage.
   - **Canvas Node Library:** `DataSourceNode`, `MathOperationNode`, `ActionTriggerNode` with configuration panels.
@@ -284,17 +289,17 @@ npm test
 # 2. Visual Canvas Drag-and-Drop & Utilities (8 unit tests)
 npm run test:frontend
 
-# 3. Ingestion Engine & Time-Series Tests
+# 3. Logic Compiler & RxJS Engine Tests (22 unit & simulation tests)
+npm run test:compiler
+
+# 4. Ingestion Engine & Time-Series Tests
 npm run test:backend
 
-# 4. Run All Test Suites
+# 5. Run Unified Test Suite across all layers (46 tests)
 npm run test:all
 
-# 5. Compiler, Auth & Multi-Rule Tests
-cd backend && npm test
-
-# 6. End-to-End Realtime Smoke Test
-cd backend && npm run smoke:realtime
+# 6. Compiler, Auth & Multi-Rule Tests (Server / Backend suite)
+node --test server/src/compiler/graphCompiler.test.js server/src/services/ruleEngine.test.js
 ```
 
 ---

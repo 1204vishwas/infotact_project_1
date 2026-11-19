@@ -1,13 +1,11 @@
 {
-  "name": "nexusflow-backend",
+  "name": "nexusflow-server",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "dev:raw": "node --watch index.js",
-    "start:raw": "node index.js",
     "test": "node --test",
     "simulate": "node scripts/telemetry-simulator.mjs",
     "smoke:realtime": "node scripts/realtime-smoke.mjs",
