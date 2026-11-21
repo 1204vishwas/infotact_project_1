@@ -214,7 +214,10 @@ function NodeConfigPanel({ node, onChange }) {
               <option value="movingAverage">Moving Average</option>
               <option value="threshold">Threshold / Comparison</option>
               <option value="scale">Scale / Offset</option>
-              <option value="delta">Delta</option>
+              <option value="delta">Delta (Step Change)</option>
+              <option value="rateOfChange">Rate of Change (dv/dt)</option>
+              <option value="min">Minimum Accumulator</option>
+              <option value="max">Maximum Accumulator</option>
               <option value="passthrough">Passthrough</option>
             </select>
           </div>
@@ -240,6 +243,8 @@ function NodeConfigPanel({ node, onChange }) {
                     <option value="<=">&lt;=</option>
                     <option value="==">==</option>
                     <option value="!=">!=</option>
+                    <option value="between">between</option>
+                    <option value="outside">outside</option>
                   </select>
                 </div>
                 <div>
@@ -247,6 +252,16 @@ function NodeConfigPanel({ node, onChange }) {
                   <input type="number" value={data.threshold ?? 80} onChange={(e) => update({ threshold: toNumberOr(e.target.value, 80) })} />
                 </div>
               </div>
+              {(data.operator === 'between' || data.operator === 'outside') && (
+                <div className="config-row">
+                  <label>Secondary Threshold (Upper Bound)</label>
+                  <input
+                    type="number"
+                    value={data.secondaryThreshold ?? 100}
+                    onChange={(e) => update({ secondaryThreshold: toNumberOr(e.target.value, 100) })}
+                  />
+                </div>
+              )}
             </>
           )}
           {data.kind === 'scale' && (
@@ -262,29 +277,45 @@ function NodeConfigPanel({ node, onChange }) {
             </div>
           )}
           {data.kind === 'delta' && <div className="config-note">Emits change from previous value (adds <code>delta</code>).</div>}
+          {data.kind === 'rateOfChange' && <div className="config-note">Calculates first derivative per second (adds <code>rateOfChange</code>).</div>}
+          {(data.kind === 'min' || data.kind === 'max') && <div className="config-note">Tracks historic running {data.kind === 'min' ? 'minimum' : 'maximum'} value.</div>}
           {data.kind === 'passthrough' && <div className="config-note">Passes events through unchanged.</div>}
         </>
       )}
 
       {type === 'actionTrigger' && (
         <>
-          <div className="config-row">
-            <label>Action Kind</label>
-            <select value={data.kind || data.channel || 'sms'} onChange={(e) => {
-              const kind = e.target.value;
-              const patch = { kind, channel: kind };
-              if (kind === 'webhook') { patch.target = data.url || data.target || 'https://example.com/hook'; patch.url = patch.target; }
-              if (kind === 'sms') { patch.target = data.phone || data.target || '+10000000000'; }
-              update(patch);
-            }}>
-              <option value="sms">SMS</option>
-              <option value="webhook">Webhook</option>
-              <option value="email">Email</option>
-              <option value="log">Log</option>
-            </select>
+          <div className="config-row two-col">
+            <div>
+              <label>Action Kind</label>
+              <select value={data.kind || data.channel || 'sms'} onChange={(e) => {
+                const kind = e.target.value;
+                const patch = { kind, channel: kind };
+                if (kind === 'webhook') { patch.target = data.url || data.target || 'https://example.com/hook'; patch.url = patch.target; }
+                if (kind === 'email') { patch.target = data.email || data.target || 'ops@nexusflow.io'; }
+                if (kind === 'sms') { patch.target = data.phone || data.target || '+10000000000'; }
+                if (kind === 'log') { patch.target = 'server-log'; }
+                if (kind === 'alert') { patch.target = 'operator-console'; }
+                update(patch);
+              }}>
+                <option value="sms">SMS</option>
+                <option value="webhook">Webhook</option>
+                <option value="email">Email</option>
+                <option value="log">Log</option>
+                <option value="alert">Console Alert</option>
+              </select>
+            </div>
+            <div>
+              <label>Severity</label>
+              <select value={data.severity || 'critical'} onChange={(e) => update({ severity: e.target.value })}>
+                <option value="critical">Critical</option>
+                <option value="warning">Warning</option>
+                <option value="info">Info</option>
+              </select>
+            </div>
           </div>
           <div className="config-row">
-            <label>{(data.kind === 'webhook') ? 'Webhook URL' : (data.kind === 'email') ? 'Email' : (data.kind === 'log') ? 'Log Target' : 'Phone / Target'}</label>
+            <label>{(data.kind === 'webhook') ? 'Webhook URL' : (data.kind === 'email') ? 'Email Address' : (data.kind === 'log') ? 'Log Target' : (data.kind === 'alert') ? 'Broadcast Hub' : 'Phone / Target'}</label>
             <input
               value={data.target || ''}
               onChange={(e) => {
@@ -292,13 +323,15 @@ function NodeConfigPanel({ node, onChange }) {
                 const patch = { target: v };
                 if ((data.kind || 'sms') === 'webhook') patch.url = v;
                 if ((data.kind || 'sms') === 'sms') patch.phone = v;
+                if ((data.kind || 'sms') === 'email') patch.email = v;
                 update(patch);
               }}
             />
           </div>
           <div className="config-row">
-            <label>Message</label>
+            <label>Message Template</label>
             <textarea rows={3} value={data.message || ''} onChange={(e) => update({ message: e.target.value })} />
+            <div className="config-note">Tokens: <code>{'{deviceId}'}</code>, <code>{'{metric}'}</code>, <code>{'{value}'}</code>, <code>{'{threshold}'}</code></div>
           </div>
         </>
       )}
@@ -323,6 +356,22 @@ function CanvasFlowInner() {
   const [outputTab, setOutputTab] = useState('output');
   const [serverRuleStatus, setServerRuleStatus] = useState(null);
   const [mobileView, setMobileView] = useState('canvas'); // 'library' | 'canvas' | 'sidebar'
+  const [librarySearch, setLibrarySearch] = useState('');
+
+  const filteredLibrary = useMemo(() => {
+    const q = librarySearch.trim().toLowerCase();
+    if (!q) return NODE_LIBRARY;
+    return NODE_LIBRARY.map((group) => {
+      const items = group.items.filter(
+        (item) =>
+          item.label.toLowerCase().includes(q) ||
+          (item.desc && item.desc.toLowerCase().includes(q)) ||
+          (item.tag && item.tag.toLowerCase().includes(q)) ||
+          (item.defaults?.kind && item.defaults.kind.toLowerCase().includes(q))
+      );
+      return { ...group, items };
+    }).filter((group) => group.items.length > 0);
+  }, [librarySearch]);
 
   const { user, token, logout, authFetch } = useAuth();
 
@@ -803,24 +852,57 @@ function CanvasFlowInner() {
         <aside className="palette">
           <div className="palette-header">
             <h2>Node Library</h2>
+            <span className="palette-badge-total">
+              {NODE_LIBRARY.reduce((acc, g) => acc + g.items.length, 0)} Nodes
+            </span>
           </div>
           <div className="palette-instruction">
             Drag nodes onto canvas or click <strong>+</strong> to add.
           </div>
-          {NODE_LIBRARY.map((group) => (
-            <div key={group.category} className="palette-group">
-              <div className="palette-group-title">{group.category}</div>
+          <div className="palette-search-wrap">
+            <span className="palette-search-icon" aria-hidden="true">🔍</span>
+            <input
+              type="text"
+              className="palette-search-input"
+              placeholder="Filter library nodes..."
+              value={librarySearch}
+              onChange={(e) => setLibrarySearch(e.target.value)}
+              aria-label="Filter library nodes"
+            />
+            {librarySearch && (
+              <button
+                type="button"
+                className="palette-search-clear"
+                onClick={() => setLibrarySearch('')}
+                title="Clear filter"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          {filteredLibrary.map((group) => (
+            <div key={group.category} className={`palette-group group-${group.category.toLowerCase().replace(/\s+/g, '-')}`}>
+              <div className="palette-group-title">
+                <span className="palette-cat-icon">{group.icon || '📁'}</span>
+                <span className="palette-cat-text">{group.category}</span>
+                <span className="palette-cat-count">{group.items.length}</span>
+              </div>
               <div className="palette-items">
                 {group.items.map((item) => (
                   <div
                     key={item.label}
-                    className="palette-item-draggable"
+                    className={`palette-item-draggable type-${item.type}`}
                     draggable
                     onDragStart={(e) => onDragStart(e, item.type, item.defaults)}
                     title={`Drag ${item.label} onto canvas`}
                   >
-                    <span className="drag-handle">⋮⋮</span>
-                    <span className="item-label">{item.label}</span>
+                    <span className="drag-handle" title="Drag onto canvas">⋮⋮</span>
+                    <span className="palette-item-icon">{item.icon || '📦'}</span>
+                    <div className="palette-item-info">
+                      <div className="item-label">{item.label}</div>
+                      {item.desc && <div className="palette-item-desc">{item.desc}</div>}
+                    </div>
+                    {item.tag && <span className="palette-item-tag">{item.tag}</span>}
                     <button
                       type="button"
                       className="palette-add-btn"
@@ -834,6 +916,11 @@ function CanvasFlowInner() {
               </div>
             </div>
           ))}
+          {filteredLibrary.length === 0 && (
+            <div className="palette-empty-search">
+              No nodes matching &ldquo;{librarySearch}&rdquo;
+            </div>
+          )}
 
           <div className="palette-group saved-graphs">
             <div className="palette-group-title">Saved Graphs</div>
