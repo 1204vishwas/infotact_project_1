@@ -36,7 +36,7 @@ class RuleEngine extends EventEmitter {
   activate(input, meta = {}) {
     const result = compileGraph(input);
     if (!result.ok) {
-      return { ...result, activated: false, status: this.getStatus() };
+      return { ...result, activated: false, status: this.getStatus(meta.ownerId ?? null) };
     }
 
     const runtimeId = RuleEngine.runtimeIdFor(meta);
@@ -71,8 +71,9 @@ class RuleEngine extends EventEmitter {
       activatedAt: new Date().toISOString(),
     });
 
-    const status = this.getStatus();
-    this.emit('activated', status);
+    const ownerId = meta.ownerId != null ? String(meta.ownerId) : null;
+    const status = this.getStatus(ownerId);
+    this.emit('activated', status, { ownerId, runtimeId });
     return { ...result, activated: true, runtimeId, status };
   }
 
@@ -81,23 +82,43 @@ class RuleEngine extends EventEmitter {
     const record = this.runtimes.get(key);
     if (!record) return false;
 
+    const ownerId = record.ownerId != null ? String(record.ownerId) : null;
+
     try { record.actionSubscription?.unsubscribe(); } catch {}
     try { record.runtime.destroy(); } catch {}
     this.runtimes.delete(key);
 
     if (emit) {
-      this.emit('deactivated', this.getStatus());
+      this.emit('deactivated', this.getStatus(ownerId), { ownerId, runtimeId: key });
     }
     return true;
   }
 
-  stopAll({ emit = true } = {}) {
+  /**
+   * Stops every runtime, or only the runtimes owned by `ownerId`. Passing an
+   * owner keeps one authenticated user from stopping another user's rules.
+   */
+  stopAll({ emit = true, ownerId = null } = {}) {
+    const scope = ownerId != null ? String(ownerId) : null;
+    const stoppedOwners = new Set();
     let stopped = 0;
-    for (const runtimeId of [...this.runtimes.keys()]) {
-      if (this.stop(runtimeId, { emit: false })) stopped += 1;
+
+    for (const [runtimeId, record] of [...this.runtimes.entries()]) {
+      if (scope != null && String(record.ownerId ?? '') !== scope) continue;
+      if (this.stop(runtimeId, { emit: false })) {
+        stopped += 1;
+        stoppedOwners.add(record.ownerId != null ? String(record.ownerId) : '');
+      }
     }
+
     if (emit && stopped > 0) {
-      this.emit('deactivated', this.getStatus());
+      if (scope != null) {
+        this.emit('deactivated', this.getStatus(scope), { ownerId: scope });
+      } else {
+        for (const owner of stoppedOwners) {
+          this.emit('deactivated', this.getStatus(owner || null), { ownerId: owner || null });
+        }
+      }
     }
     return stopped;
   }
@@ -141,22 +162,29 @@ class RuleEngine extends EventEmitter {
     };
   }
 
-  getStatus() {
-    const rules = [...this.runtimes.values()].map((record) => ({
-      runtimeId: record.runtimeId,
-      graphId: record.graphId,
-      name: record.name,
-      ownerId: record.ownerId,
-      ownerEmail: record.ownerEmail,
-      activatedAt: record.activatedAt,
-      nodeCount: record.runtime.nodeIds.length,
-      summary: record.compiled.summary,
-      activeGraph: {
-        nodeIds: record.runtime.nodeIds,
-        sourceNodeIds: record.runtime.sourceNodeIds,
-        actionNodeIds: record.runtime.actionNodeIds,
-      },
-    }));
+  /**
+   * Returns rule status. When `ownerId` is supplied the result only contains
+   * that owner's runtimes, so one user cannot discover another user's rules.
+   */
+  getStatus(ownerId = null) {
+    const scope = ownerId != null ? String(ownerId) : null;
+    const rules = [...this.runtimes.values()]
+      .filter((record) => scope == null || String(record.ownerId ?? '') === scope)
+      .map((record) => ({
+        runtimeId: record.runtimeId,
+        graphId: record.graphId,
+        name: record.name,
+        ownerId: record.ownerId,
+        ownerEmail: record.ownerEmail,
+        activatedAt: record.activatedAt,
+        nodeCount: record.runtime.nodeIds.length,
+        summary: record.compiled.summary,
+        activeGraph: {
+          nodeIds: record.runtime.nodeIds,
+          sourceNodeIds: record.runtime.sourceNodeIds,
+          actionNodeIds: record.runtime.actionNodeIds,
+        },
+      }));
 
     const first = rules[0] || null;
     return {

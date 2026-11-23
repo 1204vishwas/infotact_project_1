@@ -51,7 +51,9 @@ app.use((err, _req, res, _next) => {
 
 const server = http.createServer(app);
 const hub = createTelemetryHub(server, {
-  getStatus: () => ruleEngine.getStatus(),
+  // The hub knows which user is connected, so each socket receives only its
+  // own rule status instead of a global list of every user's rules.
+  getStatus: (userId) => ruleEngine.getStatus(userId ?? null),
   verifyToken,
 });
 
@@ -59,10 +61,18 @@ initAlertService();
 
 eventBus.on('telemetry', (payload) => hub.broadcast('telemetry', payload));
 eventBus.on('alert', (alert) => hub.broadcast('alert', alert, { ownerId: alert.ownerId }));
-eventBus.on('rule.status', (status) => hub.broadcast('rule.status', status));
 
-ruleEngine.on('activated', (status) => eventBus.emit('rule.status', status));
-ruleEngine.on('deactivated', (status) => eventBus.emit('rule.status', status));
+function publishRuleStatus(ownerId = null) {
+  const status = ruleEngine.getStatus(ownerId);
+  if (ownerId != null) {
+    hub.broadcast('rule.status', status, { ownerId });
+  } else {
+    hub.broadcast('rule.status', status);
+  }
+}
+
+ruleEngine.on('activated', (_status, meta = {}) => publishRuleStatus(meta.ownerId ?? null));
+ruleEngine.on('deactivated', (_status, meta = {}) => publishRuleStatus(meta.ownerId ?? null));
 ruleEngine.on('runtime.error', ({ runtimeId, error } = {}) => {
   console.error(`[rule-engine] runtime error (${runtimeId || 'unknown'}):`, error?.message || error);
 });

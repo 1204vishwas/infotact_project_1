@@ -44,14 +44,22 @@ export function AuthProvider({ children }) {
         const res = await fetch(`${API_BASE}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error('Session expired');
+
+        // Only an explicit auth rejection invalidates the stored session. A
+        // network error or a 5xx must not sign the user out on a flaky link.
+        if (res.status === 401 || res.status === 403) {
+          if (!cancelled) persist(null, null);
+          return;
+        }
+        if (!res.ok) return;
+
         const json = await res.json();
         if (!cancelled && json.user) {
           setUser(json.user);
           localStorage.setItem(USER_KEY, JSON.stringify(json.user));
         }
       } catch {
-        if (!cancelled) persist(null, null);
+        // Keep the cached user so a transient outage does not destroy the session.
       } finally {
         if (!cancelled) setLoading(false);
       }

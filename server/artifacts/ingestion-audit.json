@@ -1,0 +1,72 @@
+{
+  "ok": true,
+  "runAt": "2026-11-23T04:33:13.700Z",
+  "mongo": {
+    "db": "nexusflow",
+    "collection": "telemetry",
+    "timeSeries": {
+      "timeField": "timestamp",
+      "metaField": "metadata",
+      "granularity": "seconds",
+      "bucketMaxSpanSeconds": 3600,
+      "fixedBucketing": true
+    }
+  },
+  "target": {
+    "requestedWritesPerSec": 5000,
+    "expectedWrites": 5000,
+    "inserted": 5000,
+    "batches": 5,
+    "batchSize": 1000
+  },
+  "performance": {
+    "elapsedMs": 665,
+    "writesPerSec": 7519,
+    "meetsWriteTarget": true,
+    "insertedAllDocuments": true
+  },
+  "storage": {
+    "before": {
+      "size": 1899,
+      "storageSize": 36864,
+      "totalIndexSize": 249856,
+      "timeseries": {
+        "bucketCount": 5,
+        "avgBucketSize": 379
+      },
+      "documentCount": 9
+    },
+    "after": {
+      "size": 44767,
+      "storageSize": 36864,
+      "totalIndexSize": 249856,
+      "timeseries": {
+        "bucketCount": 10,
+        "avgBucketSize": 4476
+      },
+      "documentCount": 5009
+    },
+    "delta": {
+      "documentCount": 5000,
+      "size": 42868,
+      "storageSize": 0,
+      "totalIndexSize": 0,
+      "bucketCount": 5,
+      "avgBucketSize": 4097
+    }
+  },
+  "auditSample": {
+    "timestamp": "2026-11-23T04:33:18.559Z",
+    "metadata": {
+      "deviceId": "audit-turbine",
+      "metric": "temperature",
+      "source": "audit",
+      "tags": [
+        "week1-audit"
+      ],
+      "unit": "C"
+    },
+    "value": 94.5,
+    "_id": "6b03c20955b25b426b6b135c"
+  }
+}

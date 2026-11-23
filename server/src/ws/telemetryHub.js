@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 /**
  * Minimal WebSocket fan-out hub mounted on the same HTTP server as Express.
  * Clients authenticate with `?token=<jwt>` and receive telemetry batches,
- * their own persisted alerts, and global rule status changes.
+ * their own persisted alerts, their own rule status, and live telemetry.
  */
 export function createTelemetryHub(server, {
   path = '/ws',
@@ -104,7 +104,7 @@ export function createTelemetryHub(server, {
         clientId,
         serverTime: new Date().toISOString(),
         user: user ? { id: user.id, name: user.name, email: user.email } : null,
-        rule: getStatus(),
+        rule: getStatus(user?.id ?? null),
       },
     });
   });
