@@ -1,8 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { resolveWsUrl, withToken } from '../utils/realtime.js';
 
 const MAX_ALERTS = 50;
 const MAX_POINTS = 120;
+
+function resolveWsUrl() {
+  const explicit = (import.meta.env.VITE_WS_URL || '').trim();
+  if (explicit) return explicit.replace(/\/$/, '');
+
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+  if (apiBase) return `${apiBase.replace(/^http/, 'ws')}/ws`;
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/ws`;
+}
+
+function withToken(url, token) {
+  if (!token) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}token=${encodeURIComponent(token)}`;
+}
 
 export function useRealtime(token) {
   const [status, setStatus] = useState(token ? 'connecting' : 'offline');

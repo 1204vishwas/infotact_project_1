@@ -163,7 +163,7 @@ export async function deactivateSavedGraph(req, res) {
       ok: true,
       deactivated,
       runtimeId,
-      status: ruleEngine.getStatus(req.user.id),
+      status: ruleEngine.getStatus(),
     });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to deactivate saved graph', detail: error.message });

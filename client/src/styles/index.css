@@ -97,8 +97,7 @@ button.danger { background: #3a1820; border-color: #6b2a36; color: #ffd7dd; }
 .palette-group { padding: 0.7rem 0.75rem; border-bottom: 1px solid #1c2740; }
 .palette-group-title { font-size: 0.78rem; color: #9fb2d6; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.45rem; }
 .palette-items { display: flex; flex-direction: column; gap: 0.4rem; }
-.palette-item { text-align: left; font-size: 0.85rem; padding: 0.45rem 0.55rem; cursor: grab; }
-.palette-item:active { cursor: grabbing; }
+.palette-item { text-align: left; font-size: 0.85rem; padding: 0.45rem 0.55rem; }
 .palette-help { padding: 0.75rem; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
 .palette-help code { color: #cfe1ff; word-break: break-all; }
 

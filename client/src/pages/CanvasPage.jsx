@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ReactFlow, {
   addEdge,
   Background,
@@ -14,9 +14,6 @@ import { MathOperationNode } from '../nodes/MathOperationNode';
 import { ActionTriggerNode } from '../nodes/ActionTriggerNode';
 import { useRealtime } from '../hooks/useRealtime';
 import { useAuth } from '../hooks/useAuth';
-import { formatMetricValue, formatTime, toNumberOr } from '../utils/format.js';
-import { mergeAlerts } from '../utils/realtime.js';
-import { serializeGraph } from '../utils/graphSerialization.js';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
 
@@ -86,6 +83,18 @@ function nextId(prefix) {
   return `${prefix}-${idCounter}`;
 }
 
+function toNumberOr(value, fallback) {
+  if (value === '' || value === null || value === undefined) return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function formatTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString();
+}
+
 function AlertsPanel({ alerts, isActive }) {
   if (alerts.length === 0) {
     return (
@@ -139,7 +148,7 @@ function TelemetryPanel({ points }) {
           <span className="telemetry-time">{formatTime(point.timestamp)}</span>
           <span className="telemetry-device">{point.deviceId}</span>
           <span className="telemetry-metric">{point.metric}</span>
-          <span className="telemetry-value">{formatMetricValue(point.value, point.unit)}</span>
+          <span className="telemetry-value">{Number(point.value).toFixed(2)} {point.unit || ''}</span>
         </div>
       ))}
     </div>
@@ -302,32 +311,18 @@ export default function CanvasPage() {
   const [savedBusy, setSavedBusy] = useState(false);
   const [outputTab, setOutputTab] = useState('output');
   const [serverRuleStatus, setServerRuleStatus] = useState(null);
-  const [historyAlerts, setHistoryAlerts] = useState([]);
-  const [flowInstance, setFlowInstance] = useState(null);
-  const canvasRef = useRef(null);
 
   const { user, token, logout, authFetch } = useAuth();
 
   const {
     status: liveStatus,
-    alerts: liveAlerts,
+    alerts,
     telemetry,
     ruleStatus,
     lastError,
     clearAlerts,
     wsUrl,
   } = useRealtime(token);
-
-  // Live frames and persisted history overlap; mergeAlerts removes duplicates.
-  const alerts = useMemo(
-    () => mergeAlerts(liveAlerts, historyAlerts),
-    [liveAlerts, historyAlerts]
-  );
-
-  const clearAllAlerts = useCallback(() => {
-    clearAlerts();
-    setHistoryAlerts([]);
-  }, [clearAlerts]);
 
   const activeRules = Array.isArray(serverRuleStatus?.rules) ? serverRuleStatus.rules : [];
   const isActive = activeRules.length > 0 || Boolean(serverRuleStatus?.active);
@@ -383,20 +378,6 @@ export default function CanvasPage() {
     if (ruleStatus) setServerRuleStatus(ruleStatus);
   }, [ruleStatus]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await authFetch('/api/alerts?limit=50');
-        const json = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok && Array.isArray(json.items)) setHistoryAlerts(json.items);
-      } catch {
-        // History is a convenience; live alerts keep working without it.
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [authFetch]);
-
   const request = async (path, options = {}) => {
     const res = await authFetch(path, options);
     const json = await res.json().catch(() => ({}));
@@ -411,7 +392,8 @@ export default function CanvasPage() {
   const onNodeClick = useCallback((_evt, node) => setSelectedNodeId(node.id), []);
   const onPaneClick = useCallback(() => setSelectedNodeId(null), []);
 
-  const addNodeAt = (type, defaults, position) => {
+  const addNode = (type, defaults) => {
+    const position = { x: 120 + Math.random() * 420, y: 80 + Math.random() * 260 };
     const prefix = type === 'dataSource' ? 'source' : type === 'mathOperation' ? 'math' : 'action';
     let id;
     do {
@@ -420,45 +402,6 @@ export default function CanvasPage() {
 
     setNodes((nds) => nds.concat({ id, type, position, data: { ...defaults } }));
     setSelectedNodeId(id);
-  };
-
-  const addNode = (type, defaults) => {
-    const position = { x: 120 + Math.random() * 420, y: 80 + Math.random() * 260 };
-    addNodeAt(type, defaults, position);
-  };
-
-  const onPaletteDragStart = (event, item) => {
-    event.dataTransfer.setData('application/reactflow', JSON.stringify(item));
-    event.dataTransfer.effectAllowed = 'move';
-  };
-
-  const onCanvasDragOver = (event) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  };
-
-  const onCanvasDrop = (event) => {
-    event.preventDefault();
-    const raw = event.dataTransfer.getData('application/reactflow');
-    if (!raw) return;
-
-    let item;
-    try {
-      item = JSON.parse(raw);
-    } catch {
-      return;
-    }
-    if (!item?.type) return;
-
-    const bounds = canvasRef.current?.getBoundingClientRect();
-    const position = flowInstance?.project && bounds
-      ? flowInstance.project({
-          x: event.clientX - bounds.left,
-          y: event.clientY - bounds.top,
-        })
-      : { x: event.clientX, y: event.clientY };
-
-    addNodeAt(item.type, item.defaults || {}, position);
   };
 
   const updateNodeData = useCallback((id, data) => {
@@ -483,7 +426,19 @@ export default function CanvasPage() {
     setOutputTab('output');
   };
 
-  const buildGraph = () => serializeGraph({ nodes, edges });
+  const buildGraph = () => ({
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    nodes: nodes.map(({ id, type, position, data }) => ({ id, type, position, data })),
+    edges: edges.map(({ id, source, target, sourceHandle, targetHandle, type }) => ({
+      id,
+      source,
+      target,
+      sourceHandle: sourceHandle ?? null,
+      targetHandle: targetHandle ?? null,
+      type: type ?? 'default',
+    })),
+  });
 
   const serializeGraph = () => {
     setSerialized(JSON.stringify(buildGraph(), null, 2));
@@ -750,14 +705,7 @@ export default function CanvasPage() {
               <div className="palette-group-title">{group.category}</div>
               <div className="palette-items">
                 {group.items.map((item) => (
-                  <button
-                    key={item.label}
-                    className="palette-item"
-                    draggable
-                    onDragStart={(event) => onPaletteDragStart(event, item)}
-                    onClick={() => addNode(item.type, item.defaults)}
-                    title="Drag onto the canvas, or click to add"
-                  >
+                  <button key={item.label} className="palette-item" onClick={() => addNode(item.type, item.defaults)}>
                     + {item.label}
                   </button>
                 ))}
@@ -812,12 +760,7 @@ export default function CanvasPage() {
           </div>
         </aside>
 
-        <section
-          className="canvas-wrap"
-          ref={canvasRef}
-          onDragOver={onCanvasDragOver}
-          onDrop={onCanvasDrop}
-        >
+        <section className="canvas-wrap">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -826,7 +769,6 @@ export default function CanvasPage() {
             onConnect={onConnect}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
-            onInit={setFlowInstance}
             nodeTypes={nodeTypes}
             fitView
           >
@@ -912,7 +854,7 @@ export default function CanvasPage() {
                 <button className={`tab ${outputTab === 'telemetry' ? 'active' : ''}`} onClick={() => setOutputTab('telemetry')}>Live Data</button>
               </div>
               <div className="header-actions">
-                {outputTab === 'alerts' && alerts.length > 0 && <button onClick={clearAllAlerts}>Clear</button>}
+                {outputTab === 'alerts' && alerts.length > 0 && <button onClick={clearAlerts}>Clear</button>}
                 {outputTab === 'output' && compileResult && <button onClick={clearCompileResult}>Clear Result</button>}
                 {outputTab === 'output' && serialized && !compileResult && <button onClick={clearSerialized}>Clear</button>}
               </div>

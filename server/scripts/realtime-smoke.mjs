@@ -283,58 +283,7 @@ async function main() {
     }
     summary.isolation = { foreignGraphStatus: forbiddenGraph.res.status, foreignAlerts: otherAlerts.json.count };
 
-    // 7. A second user cannot stop, hijack, or inspect the first user's rules.
-    const foreignStop = await api('/api/graphs/deactivate', {
-      method: 'POST',
-      token: secondaryToken,
-      body: { runtimeId: runtimeB },
-    });
-    if (foreignStop.res.status !== 404) {
-      throw new Error(`Expected 404 stopping another user's rule, got ${foreignStop.res.status}`);
-    }
-
-    const foreignStopAll = await api('/api/graphs/deactivate', {
-      method: 'POST',
-      token: secondaryToken,
-      body: { all: true },
-    });
-    if (foreignStopAll.json.deactivated !== 0) {
-      throw new Error(`Second user stopped foreign rules: ${JSON.stringify(foreignStopAll.json)}`);
-    }
-
-    const foreignActive = await api('/api/graphs/active', { token: secondaryToken });
-    if (foreignActive.json.count !== 0) {
-      throw new Error(`Expected an empty rule list for the second user, got ${foreignActive.json.count}`);
-    }
-
-    const anonymousActive = await api('/api/graphs/active');
-    if (anonymousActive.res.status !== 401) {
-      throw new Error(`Expected 401 without a token, got ${anonymousActive.res.status}`);
-    }
-
-    const hijack = await api('/api/graphs/compile', {
-      method: 'POST',
-      token: secondaryToken,
-      body: { graph: graphB, activate: true, graphId: savedId, name: 'Hijack' },
-    });
-    if (hijack.res.status !== 404) {
-      throw new Error(`Expected 404 activating another user's graph, got ${hijack.res.status}`);
-    }
-
-    const primaryStillActive = await api('/api/graphs/active', { token: primaryToken });
-    if (primaryStillActive.json.count !== 2) {
-      throw new Error(`Expected the primary user's 2 rules to survive, got ${primaryStillActive.json.count}`);
-    }
-    summary.ownership = {
-      foreignStop: foreignStop.res.status,
-      foreignStopAllDeactivated: foreignStopAll.json.deactivated,
-      foreignActiveCount: foreignActive.json.count,
-      anonymousActive: anonymousActive.res.status,
-      hijackStatus: hijack.res.status,
-      primaryRulesIntact: primaryStillActive.json.count,
-    };
-
-    // 8. Tear down all rules and the saved graph.
+    // 7. Tear down all rules and the saved graph.
     const stopAll = await api('/api/graphs/deactivate', {
       method: 'POST',
       token: primaryToken,

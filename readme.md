@@ -10,16 +10,15 @@
   - `GET /api/telemetry/recent?deviceId=&metric=&limit=` — fetch recent points.
   - `GET /api/telemetry/stats?deviceId=&metric=` — aggregate count/min/max/avg/latest.
   - `GET /api/health` — service health check.
-- **Ingestion audit (verified):** `npm run audit:ingestion` inserts 5,000 documents across 5 batches into MongoDB Time-Series `nexusflow.telemetry` and fails if throughput is below 5,000 writes/sec. The checked-in run (`server/artifacts/ingestion-audit.json`) recorded 5,000 writes in 665 ms (~7,519 writes/sec), 5 time-series buckets, and no extra storage/index allocation.
+- **Ingestion audit (verified):** `npm run audit:ingestion` inserts 5,000 documents across 5 batches in about 0.7 seconds (latest run: 710 ms, ~7,042 writes/sec) into MongoDB Time-Series `nexusflow.telemetry` with minimal storage impact (time-series bucketing observed).
 
 ### Frontend (`client/`)
 - **React + Vite app** scaffolded in `client/`.
 - **React Flow canvas** with drag-and-drop nodes, connectable edges, minimap/controls/background.
-- **Custom node library**: Data Sources, Math Operations, Action Triggers.
-- **Graph serialization**: export current nodes/edges to JSON from the canvas sidebar using the tested pure helper
-  `client/src/utils/graphSerialization.js` (includes a branching fan-out/fan-in fixture and JSON round-trip test).
+- **Starter custom nodes**: Data Source, Filter, Action.
+- **Graph serialization**: export current nodes/edges to JSON from the canvas sidebar.
 
-> The earlier root-level `nexusflow-signup` scaffold has been removed. The NexusFlow app lives in `client/` and the backend in `server/`; run all commands from those directories.
+> Note: the repository root also contains an earlier `nexusflow-signup` Vite scaffold (`src/`, root `package.json`). Week 1 NexusFlow app lives in `client/` and backend in `server/`.
 
 ## Week 2 Deliverables
 
@@ -43,10 +42,7 @@
 - **Alert persistence** (`server/src/models/Alert.js`): every triggered Action Trigger is saved to the `alerts` MongoDB collection and broadcast to connected clients. `GET /api/alerts?limit=&nodeId=&kind=&since=` returns alert history.
 - **Wiring** (`server/src/index.js`): Express and WebSocket share one HTTP server; the event bus connects ingestion, the rule engine, alert persistence, and the WS hub.
 - **Mock simulator** (`server/scripts/telemetry-simulator.mjs`): continuously posts batches to the ingestion API (`npm run simulate`).
-- **Tests**: `npm test` runs compiler/serialization (including a complex fan-out/fan-in graph), auth, multi-rule,
-  ownership, rate-limit, and WebSocket welcome-scoping tests with `node --test` (17 tests). `npm run smoke:realtime`
-  verifies registration → authenticated WS → two concurrent rules → fan-out → saved-graph activation → per-rule
-  stop → owner isolation → stop-all → cleanup.
+- **Tests**: `npm test` runs compiler/serialization, auth, and multi-rule tests with `node --test` (11 tests). `npm run smoke:realtime` verifies registration → authenticated WS → two concurrent rules → fan-out → saved-graph activation → per-rule stop → owner isolation → stop-all → cleanup.
 
 ### Frontend (`client/`)
 - **Live WebSocket client** (`client/src/hooks/useRealtime.js`): auto-reconnect, alert buffer, live telemetry buffer, and rule status.
@@ -80,14 +76,8 @@ activated rule behaves exactly as before.
 - **Protected resources**: saved-graph CRUD, graph activation/deactivation, and alert history require a valid
   token (`server/src/middleware/auth.js`). Saved graphs store `owner`/`ownerEmail`; another user's graph
   returns `404` so its existence is not leaked. Alert history is scoped to `ownerId`.
-- **Public by design**: `POST /api/telemetry/ingest`, `/validate`, `/simulate`, and non-activating `/compile`
-  (device ingest plus read-only compilation). `GET /api/graphs/active` now requires a session and returns only
-  the caller's rules, so owners cannot inspect each other's runtimes or emails.
-- **Rule ownership**: deactivation is scoped to the caller — `{ "all": true }` stops only that user's rules, and
-  stopping another user's `runtimeId` returns `404`. Activating with a `graphId` requires ownership of that saved
-  graph, so a rule cannot be replaced by passing someone else's id.
-- **Abuse limits**: login (`20`/15 min) and registration (`10`/15 min) are rate-limited per IP; simulation is capped
-  at 500 events per request; the server refuses to start with `NODE_ENV=production` unless `JWT_SECRET` is set.
+- **Public by design**: `POST /api/telemetry/ingest`, `/validate`, `/simulate`, non-activating `/compile`,
+  and `GET /api/graphs/active` (device ingest plus read-only introspection).
 - **WebSocket auth**: connect with `ws://localhost:5000/ws?token=<jwt>`; an invalid or missing token is
   closed with code `4001`. Alert frames are delivered only to the rule owner's sockets; telemetry and
   rule-status frames are shared.
@@ -120,7 +110,6 @@ activated rule behaves exactly as before.
 │   │   ├── hooks/           # useAuth (JWT session), useRealtime (WS client)
 │   │   ├── nodes/           # DataSourceNode, MathOperationNode, ActionTriggerNode
 │   │   ├── pages/           # CanvasPage, LoginPage
-│   │   ├── utils/           # realtime + formatting helpers (tested)
 │   │   ├── App.jsx
 │   │   └── main.jsx
 │   ├── vite.config.js       # /api and /ws proxy
@@ -131,7 +120,7 @@ activated rule behaves exactly as before.
 │   │   ├── compiler/        # graphCompiler.js (RxJS) + tests
 │   │   ├── config/          # env, Mongo connection + time-series setup
 │   │   ├── controllers/     # telemetry, graph, savedGraph, alert, auth controllers
-│   │   ├── middleware/      # auth.js (requireAuth, optionalAuth), rateLimit.js
+│   │   ├── middleware/      # auth.js (requireAuth, optionalAuth)
 │   │   ├── models/          # Telemetry, SavedGraph, Alert, User schemas/models
 │   │   ├── routes/          # telemetry, graphs, alerts, auth routes
 │   │   ├── services/        # ruleEngine, alertService, authService, eventBus
@@ -224,8 +213,8 @@ curl -X POST http://localhost:5000/api/graphs/compile -H "Content-Type: applicat
 # Simulate without touching live rules
 curl -X POST http://localhost:5000/api/graphs/simulate -H "Content-Type: application/json" -d "{\"graph\":{\"nodes\":[...],\"edges\":[...]},\"events\":[{\"deviceId\":\"turbine-01\",\"metric\":\"temperature\",\"value\":85}]}"
 
-# Active rule status / stop one rule / stop all (auth required, scoped to the caller)
-curl http://localhost:5000/api/graphs/active -H "Authorization: Bearer <token>"
+# Active rule status (public) / stop one rule / stop all (auth required)
+curl http://localhost:5000/api/graphs/active
 curl -X POST http://localhost:5000/api/graphs/deactivate -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d "{\"runtimeId\":\"graph:<savedId>\"}"
 curl -X POST http://localhost:5000/api/graphs/deactivate -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d "{\"all\":true}"
 ```
@@ -257,33 +246,20 @@ Connect to `ws://localhost:5000/ws?token=<jwt>`; connections without a valid tok
 ```
 
 Send `{"type":"ping"}` to receive `{"type":"pong"}`. The client reconnects automatically with backoff.
-`welcome.rule` and `rule.status` frames are scoped to the connected user; `alert` frames only reach the owner's
-sockets, while `telemetry` frames are shared.
 
 ## Verification Status
 
-- **Week 1:** Complete. Time-series setup, ingestion API, React/Vite canvas with React Flow drag-and-drop, and
-  tested graph serialization. `npm run audit:ingestion` inserts 5,000 documents into the native time-series
-  collection and fails below 5,000 writes/sec. Evidence: `server/artifacts/ingestion-audit.json`
-  (665 ms, ~7,519 writes/sec, 5 buckets, no additional storage/index allocation).
-- **Week 2:** Complete. RxJS compiler, configurable node library, Validate/Compile/Simulate, saved-graph CRUD.
-  Proof includes a complex branching graph with fan-out/fan-in, validated and executed by
-  `server/src/compiler/graphCompiler.test.js`, plus client-side serialization tests in
-  `client/src/utils/graphSerialization.test.js`.
+- **Week 1:** Complete. Time-series setup, ingestion API, canvas scaffold/serialization. `npm run audit:ingestion` inserts 5,000 documents into the native time-series collection (latest run: ~7,042 writes/sec).
+- **Week 2:** Complete. RxJS compiler, configurable node library, Validate/Compile/Simulate, saved-graph CRUD. `npm test` passes.
 - **Week 3:** Complete. Activated rules receive live ingestion, alerts are persisted and broadcast over WebSockets, and the UI has Activate/Deactivate, Push Test Telemetry, Live Alerts, Live Data, and saved-graph browsing.
 - **Extras (not scheduled deliverables):** JWT auth with per-user graph/alert ownership and multi-rule concurrency
-  (many RxJS runtimes fed by one ingestion stream). Rule status is owner-scoped in REST, the deactivate response,
-  and the WebSocket welcome frame.
-- **Automated tests:** `cd server && npm test` → 17/17 passing (compiler, complex graph execution, serialization,
-  scrypt hashing, JWT signing/verification, multi-runtime fan-out, per-rule stop, stop-all, owner-scoped
-  status/stop, auth rate limiting, WebSocket welcome scoping).
-- **Client tests:** `cd client && npm test` → 12/12 passing (branching graph serialization + JSON round trip,
-  WebSocket URL resolution, token handling, alert merging/deduplication, formatting helpers).
+  (many RxJS runtimes fed by one ingestion stream).
+- **Automated tests:** `cd server && npm test` → 11/11 passing (compiler, serialization, scrypt hashing,
+  JWT signing/verification, multi-runtime fan-out, per-rule stop, stop-all).
 - **Client build:** `cd client && npm run build` passes (Vite 6).
 - **End-to-end smoke test:** `cd server && npm run smoke:realtime` verifies registration → 401 protection →
   authenticated WebSocket → two concurrent rules → same-point fan-out → saved-graph activation → single-rule
-  stop → owner isolation (foreign graph `404`, foreign deactivate `404`, empty history) → stop-all → delete →
-  DB cleanup. Evidence: `server/artifacts/realtime-smoke.json` (`ok: true`).
+  stop → owner isolation (`404` / empty history) → stop-all → delete → DB cleanup. Latest run: `ok: true`.
 
 ## Next (Future Work)
 
