@@ -41,9 +41,15 @@ All Week 1 and Week 2 deliverables were completed and demonstrated before the mi
 
 > Note: Week 3 (live rule execution, WebSockets, and alerting) documented below was added after the mid-project review.
 
-## Week 3 Deliverables — Live Rule Execution & WebSockets
+## Week 3 — Live Rule Execution & Dashboards
 
-### Backend (`server/`)
+**Planned scope (from project brief):**
+- **Live Rule Execution**: Connect the incoming WebSocket telemetry to the dynamically compiled RxJS pipelines to evaluate rules in memory.
+- **Live Dashboards**: Build real-time Recharts/Chart.js components that subscribe to WebSocket streams for live data visualization.
+
+### Implemented (current status)
+
+#### Backend (`server/`)
 - **Live rule runtime** (`server/src/services/ruleEngine.js`): owns every active compiled RxJS pipeline (see [Multi-Rule Execution](#multi-rule-execution-beyond-the-weekly-plan)). `POST /api/telemetry/ingest` feeds every accepted point into every active runtime after the time-series write, so rules execute against real telemetry instead of only `/simulate`.
 - **WebSocket hub** (`server/src/ws/telemetryHub.js`): native `ws` server at `ws://localhost:5000/ws`, with heartbeat/ping, welcome status, reconnect-safe broadcasting, and telemetry/alerts/rule-status messages.
 - **Alert persistence** (`server/src/models/Alert.js`): every triggered Action Trigger is saved to the `alerts` MongoDB collection and broadcast to connected clients. `GET /api/alerts?limit=&nodeId=&kind=&since=` returns alert history.
@@ -54,12 +60,13 @@ All Week 1 and Week 2 deliverables were completed and demonstrated before the mi
   verifies registration → authenticated WS → two concurrent rules → fan-out → saved-graph activation → per-rule
   stop → owner isolation → stop-all → cleanup.
 
-### Frontend (`client/`)
+#### Frontend (`client/`)
 - **Live WebSocket client** (`client/src/hooks/useRealtime.js`): auto-reconnect, alert buffer, live telemetry buffer, and rule status.
-- **Activate / Deactivate / Push Test Telemetry**: the canvas can now start and stop the live rule and inject matching telemetry without leaving the UI.
-- **Live Alerts panel + Live Data tab**: alerts arrive instantly in the canvas and in the sidebar; the sidebar also shows recent telemetry points.
+- **Activate / Deactivate / Push Test Telemetry**: the canvas can start and stop the live rule and inject matching telemetry without leaving the UI.
+- **Live Alerts panel + Live Data tab**: alerts arrive instantly in the canvas and the sidebar; the sidebar also shows recent telemetry points.
 - **Saved graph browser**: save, load, refresh, and delete graphs directly from the canvas palette.
-- **Config fix**: `client/.env` now uses the Vite `/api` and `/ws` proxy instead of the incorrect hard-coded port `5001`.
+- **Config fix**: `client/.env` uses the Vite `/api` and `/ws` proxy instead of a hard-coded backend port.
+- **Live Dashboards (planned)**: Recharts/Chart.js real-time chart components subscribed to WebSocket streams are not yet implemented; the current UI shows live alert/data feeds.
 
 ### Live demo (5 minutes)
 1. Start MongoDB, then `cd server && npm run dev`.
@@ -276,7 +283,7 @@ sockets, while `telemetry` frames are shared.
   Proof includes a complex branching graph with fan-out/fan-in, validated and executed by
   `server/src/compiler/graphCompiler.test.js`, plus client-side serialization tests in
   `client/src/utils/graphSerialization.test.js`.
-- **Week 3:** Complete. Activated rules receive live ingestion, alerts are persisted and broadcast over WebSockets, and the UI has Activate/Deactivate, Push Test Telemetry, Live Alerts, Live Data, and saved-graph browsing.
+- **Week 3:** Partially complete. Live rule execution is implemented: incoming WebSocket/HTTP telemetry feeds dynamically compiled RxJS pipelines, and alerts are persisted and broadcast in real time. Live dashboard chart components (Recharts/Chart.js) from the brief are still planned.
 - **Extras (not scheduled deliverables):** JWT auth with per-user graph/alert ownership and multi-rule concurrency
   (many RxJS runtimes fed by one ingestion stream). Rule status is owner-scoped in REST, the deactivate response,
   and the WebSocket welcome frame.
@@ -290,6 +297,16 @@ sockets, while `telemetry` frames are shared.
   authenticated WebSocket → two concurrent rules → same-point fan-out → saved-graph activation → single-rule
   stop → owner isolation (foreign graph `404`, foreign deactivate `404`, empty history) → stop-all → delete →
   DB cleanup. Evidence: `server/artifacts/realtime-smoke.json` (`ok: true`).
+
+## Week 4 — Webhooks & Alerting (Planned)
+
+- **Webhooks & Alerting**: Add outbound integration capabilities, such as triggering external APIs or mock SMS services when rules evaluate to true. This builds on the existing action-trigger and alert-persistence pipeline by delivering real outbound notifications instead of simulated actions.
+- **Refine & Polish**: Add visual feedback to the canvas, for example making connection wires "glow" or animate when data passes through them, so users can see rule execution flow in real time.
+
+## Final Project Review (Target)
+
+- **Dynamic rule engine**: A highly advanced dynamic rule engine capable of executing user-defined logic against high-velocity data streams.
+- **No-code visual interface**: A sophisticated, no-code visual programming interface built entirely in the browser.
 
 ## Next (Future Work)
 
