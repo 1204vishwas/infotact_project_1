@@ -25,7 +25,8 @@
     "client:build": "npm --prefix client run build",
     "server": "node server/index.js",
     "server:init": "node server/scripts/initTimeSeries.js",
-    "server:benchmark": "node server/scripts/benchmark.js"
+    "server:benchmark": "node server/scripts/benchmark.js",
+    "audit:ingestion": "npm --prefix backend run audit:ingestion"
   },
   "dependencies": {
     "compression": "^1.8.2",

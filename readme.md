@@ -38,7 +38,7 @@ NexusFlow provides two cohesive subsystems tailored for edge-to-cloud IoT workfl
   - **MongoDB Time-Series Setup:** native time-series collection (`telemetry`) with `timeField: timestamp`, `metaField: metadata`, and compound indexes (`server/src/config/db.js`).
   - **Mongoose Telemetry Model:** schema aligned to time-series documents (`server/src/models/Telemetry.js`).
   - **High-Speed Ingestion Endpoints:** `POST /api/telemetry/ingest`, `GET /recent`, `GET /stats`, `GET /health`.
-  - **Ingestion Audit (`npm run audit:ingestion`):** inserts 5,000 documents across 5 batches in ~0.7 seconds (~7,042 writes/sec) into `nexusflow.telemetry`.
+  - **Ingestion Audit (`npm run audit:ingestion`):** inserts 5,000 documents across 5 batches in ~0.71 seconds (~7,022 writes/sec) into `nexusflow.telemetry`, reports bucket packing and WiredTiger storage deltas, and compares 25,000 Time-Series writes (~95,420 writes/sec, 3.44 bytes/measurement) against an identical Standard collection (93.84% smaller total footprint, 16.24x compression).
   - **React Flow Canvas (`client/`):** drag-and-drop node canvas, connectable edges, minimap, controls, and JSON serialization. Features HTML5 native drag-and-drop from the Node Library palette directly onto the canvas with real-time coordinate projection (`screenToFlowPosition` / `project`), visual drag handles, quick click-to-add buttons, semantic MiniMap node coloring, template presets, and guest demo access.
 
 - **Week 2 Deliverables — Logic Compiler Engine:**
