@@ -34,6 +34,12 @@
 - **Configurable canvas** (`client/src/pages/CanvasPage.jsx`): node selection/editing panel, add nodes from library, Validate/Compile (RxJS)/Simulate actions calling backend compiler APIs, Serialize Graph export. Uses Vite `/api` proxy for dev.
 - **Styles updated** for palette, config panel, and node states.
 
+## Mid-Project Review Status
+
+All Week 1 and Week 2 deliverables were completed and demonstrated before the mid-project review. The MongoDB time-series telemetry collection, high-speed Express ingestion endpoints, and the React Flow drag-and-drop canvas were implemented first; the RxJS graph compiler, the three custom node categories, and reliable graph serialization followed. Both the ingestion audit and the graph serialization check were verified during the mid-review demonstration, and every related change is committed to the repository.
+
+> Note: Week 3 (live rule execution, WebSockets, and alerting) documented below was added after the mid-project review.
+
 ## Week 3 Deliverables — Live Rule Execution & WebSockets
 
 ### Backend (`server/`)
