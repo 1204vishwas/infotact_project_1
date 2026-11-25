@@ -19,12 +19,13 @@ import { optionalAuth, requireAuth } from '../middleware/auth.js';
 
 export const graphRouter = Router();
 
-// Public: validation, simulation, non-activating compilation, and reading the
-// list of running rules. Activation and saved-graph CRUD require a session.
+// Public: validation, simulation, and non-activating compilation. Everything
+// that reads or changes a user's running rules needs a session, and rule status
+// is scoped to the caller so owners cannot inspect each other's rules.
 graphRouter.post('/validate', validateGraphHandler);
 graphRouter.post('/compile', optionalAuth, compileGraphHandler);
 graphRouter.post('/simulate', simulateGraphHandler);
-graphRouter.get('/active', getActiveGraphHandler);
+graphRouter.get('/active', requireAuth, getActiveGraphHandler);
 graphRouter.post('/deactivate', requireAuth, deactivateGraphHandler);
 
 graphRouter.get('/saved', requireAuth, listSavedGraphs);

@@ -2,6 +2,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Refuse to boot in production with the well-known development secret.
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be set when NODE_ENV=production');
+}
+
 export const config = {
   port: Number(process.env.PORT || 5000),
   mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/nexusflow',
